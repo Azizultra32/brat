@@ -7,8 +7,8 @@ This table maps recurring Gastown pain points to the Grit-backed Brat design and
 | Pain point | Grit substrate response | Harness work needed |
 | --- | --- | --- |
 | Dirty working trees and phantom diffs | No tracked metadata; WAL in `refs/grit/wal` | Ensure harness never writes metadata into worktrees; export only on demand |
-| Destructive or scary repair (doctor) | `grit doctor` is monotonic; rebuild projections only | Surface `doctor` and rebuild actions in the control room with clear prompts |
-| Daemon required for correctness | Grit CLI is always correct; `gritd` is optional | Make harness tolerate daemon absence and fall back to CLI-only flows |
+| Destructive or scary repair (doctor) | `brat doctor` is monotonic; rebuild projections only | Surface `doctor` and rebuild actions in the control room with clear prompts |
+| Daemon required for correctness | Brat wraps a correct substrate; `gritd` is optional | Make harness tolerate daemon absence and fall back to CLI-only flows |
 | Commands that hang (`brat feed`) | Grit CLI defaults to non-blocking; `--json` always available | Align harness UI and CLI to the same non-blocking contract |
 | Orphaned sessions and stuck workers | Persistent actors + WAL event log | Implement session state machine + reconciliation on startup |
 | Silent failures with no logs | Event log is durable; comments/labels can store exit data | Always post exit code + last logs to Grit comments on failure |

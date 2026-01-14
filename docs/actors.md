@@ -28,3 +28,9 @@ Actor context for a command is resolved in this order:
 ## Shared repo guidance
 
 When multiple agents share the same `.git` directory, each agent must use a distinct actor directory to avoid concurrent writes to the same local DB.
+
+## Actor model for Brat
+
+- Default: one actor per repo per machine.
+- If multiple agents run in the same repo, each agent must use a distinct actor.
+- Role attribution is stored in session comments (`role` field); do not create per-role actors unless isolation is needed.

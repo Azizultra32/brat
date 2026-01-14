@@ -53,8 +53,10 @@ Harness (Brat):
 - `docs/session-event-schema.md`
 - `docs/label-glossary.md`
 - `docs/canonical-spec.md`
+- `docs/merge-policy.md`
 - `docs/brat-cli.md`
 - `docs/usability.md`
+- `docs/brat-status-schema.md`
 - `docs/multi-repo.md`
 - `docs/tmux-bootstrap.sh`
 - `docs/bratd.md`

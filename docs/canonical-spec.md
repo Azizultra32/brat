@@ -6,8 +6,8 @@ This doc is the single source of truth for identifiers, labels, comment schemas,
 
 All IDs are ASCII and lowercase where applicable.
 
-- `convoy_id`: `c-YYYYMMDD-<4hex>` (example `c-20250114-ax9f`)
-- `task_id`: `t-YYYYMMDD-<4hex>` (example `t-20250114-3k2m`)
+- `convoy_id`: `c-YYYYMMDD-<4hex>` (example `c-20250114-a2f9`)
+- `task_id`: `t-YYYYMMDD-<4hex>` (example `t-20250114-3a2c`)
 - `session_id`: `s-YYYYMMDD-<4hex>` (example `s-20250114-7b3d`)
 - `actor_id`: 16-byte hex string (Grit actor ID)
 
@@ -97,6 +97,7 @@ Use labels `to:<actor_id>`, `needs-ack`, `ack:<actor_id>`, `urgency:low|med|high
 - Grit exports: `.grit/`
 - Brat worktrees: `.grit/worktrees/polecat-<n>`
 - Brat config: `.brat/config.toml`
+- Session logs: `.grit/logs/<session_id>.log` (hashed as `sha256:<hex>` in `last_output_ref`)
 
 ## Daemon semantics
 

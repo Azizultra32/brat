@@ -12,6 +12,7 @@ Brat supports multi-repo projects by mirroring convoys across repos. Each repo h
 ## Default behavior
 
 - Brat operates on the current repo only unless `--all-repos` or `--repo <path>` is specified.
+- `--all-repos` uses the list in `.brat/config.toml` (`[repos].roots`).
 
 ## Benefits
 

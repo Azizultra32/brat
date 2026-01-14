@@ -47,6 +47,8 @@ last_output_ref = "sha256:..."
 - `exit_reason`
 - `last_output_ref`
 
+`actor_id` is implied by the Grit event author; it does not need to be duplicated in the comment.
+
 ## Allowed values
 
 - `role`: `mayor|witness|refinery|deacon|user`
@@ -67,6 +69,10 @@ On exit, set:
 - `exit_code`
 - `exit_reason` (signal, timeout, crash, user stop)
 - `last_output_ref` (hash or pointer to logs)
+
+## Log storage
+
+Session logs are written to `.grit/logs/<session_id>.log`. `last_output_ref` is the SHA-256 hash of that file in the form `sha256:<hex>`.
 
 ## Parsing rules
 

@@ -26,3 +26,14 @@ trait Engine {
 - All engine calls are wrapped in bounded timeouts.
 - Outputs are captured and hashed for reference.
 - Errors are structured and surfaced via Grit comments or labels.
+
+## Normalization defaults
+
+- Spawn timeout: 60s
+- Send timeout: 5s
+- Tail timeout: 10s
+- Stop timeout: 10s
+- Health timeout: 5s
+- Spawn retry: 1 (with backoff)
+
+Exit codes are normalized to `exit_code` and `exit_reason` in session comments.

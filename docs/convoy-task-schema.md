@@ -46,6 +46,8 @@ Optional labels (see `docs/label-glossary.md` for canonical values):
 - `urgency:low|med|high`
 - `merge:queued|running|failed|succeeded`
 
+Merge label transitions follow `docs/merge-policy.md`.
+
 Recommended fields in the issue body:
 
 ```

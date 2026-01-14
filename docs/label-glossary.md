@@ -8,6 +8,7 @@ This doc defines the canonical labels used by Brat when writing to Grit. Labels 
 - `type:task`
 - `convoy:<convoy_id>`
 - `task:<task_id>`
+- `repo:<name>`
 
 ## Convoy status
 

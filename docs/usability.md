@@ -68,7 +68,7 @@ JSON output requirements:
     {
       "kind": "stuck_session",
       "summary": "Session s-20250114-7b3d missed heartbeat for 5m",
-      "task_id": "t-20250114-3k2m",
+      "task_id": "t-20250114-3a2c",
       "session_id": "s-20250114-7b3d",
       "cognitive_prompt": "Decide whether to wait, restart the session, or reassign the task. Add context if the task spec is unclear.",
       "recommended_actions": [
@@ -85,7 +85,7 @@ JSON output requirements:
 
 ```
 Interventions needed:
-- stuck_session: s-20250114-7b3d (task t-20250114-3k2m) missed heartbeat for 5m
+- stuck_session: s-20250114-7b3d (task t-20250114-3a2c) missed heartbeat for 5m
   Cognitive prompt: Decide whether to wait, restart the session, or reassign the task. Add context if the task spec is unclear.
   Actions:
     brat session tail s-20250114-7b3d --lines 200
@@ -132,6 +132,15 @@ Interventions needed:
   - Commands:
     - `brat doctor --rebuild`
 
+## Default intervention thresholds
+
+- Heartbeat interval: 30s
+- Stale session: 5m without heartbeat
+- Blocked task escalation: 24h in `status:blocked`
+- Merge retry limit: 2 attempts
+
+Defaults are configurable in `.brat/config.toml` under `[interventions]`, except merge retries which are under `[refinery]`.
+
 ## Status output expectations
 
 `brat status` should show:
@@ -141,6 +150,10 @@ Interventions needed:
 - Merge queue state and failures
 - Lock conflicts
 - A short “interventions needed” list with suggested commands
+
+`brat status --watch` is the opt-in streaming mode used in the control room.
+
+JSON schema details are defined in `docs/brat-status-schema.md`.
 
 ## Control room UX
 

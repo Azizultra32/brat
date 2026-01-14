@@ -4,7 +4,7 @@ This doc describes how the harness maps its concepts onto Grit issues, comments,
 
 ## Core entities
 
-- Town (repo): `grit init` enables the repo and creates the WAL + local state.
+- Town (repo): `brat init` enables the repo and creates the WAL + local state.
 - Convoy (bundle of tasks): represented as a Grit issue with label `type:convoy`.
 - Task: represented as a Grit issue with label `type:task`.
 - Task membership: task issues include label `convoy:<id>` (or a `LinkAdded` to the convoy issue).

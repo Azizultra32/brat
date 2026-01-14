@@ -10,10 +10,17 @@ The Brat CLI is the harness control plane. It orchestrates roles and uses Grit f
 - Streaming and waiting require explicit flags (`--follow`, `--wait --timeout`)
 - Single CLI: `brat` wraps Grit; `grit` is for debugging only
 
+## Repo scope
+
+- Commands operate on the current repo by default.
+- Use `--repo <path>` to target a different repo.
+- Use `--all-repos` on list/status commands to aggregate across repos.
+- All CLI commands connect to the single `bratd` session registry when it is running.
+
 ## Command surface (initial)
 
-- `brat init`
-- `brat status [--json] [--all-repos]`
+- `brat init [--no-daemon] [--no-tmux] [--no-config]`
+- `brat status [--json] [--all-repos] [--convoy <convoy_id>] [--watch]`
 - `brat convoy create --title ... --goal ...`
 - `brat convoy create --mirror --repos <paths>`
 - `brat convoy list [--json] [--all-repos]`
@@ -23,7 +30,7 @@ The Brat CLI is the harness control plane. It orchestrates roles and uses Grit f
 - `brat task add --solo --title ... --paths ...`
 - `brat task add --convoy <id> --repo <path> --title ...`
 - `brat task assign <task_id> --assignee <actor_id>`
-- `brat task list [--json] [--all-repos]`
+- `brat task list [--json] [--all-repos] [--label <label>]`
 - `brat task show <task_id> [--json]`
 - `brat task comment <task_id> --body ...`
 - `brat task close <task_id> --reason done`
@@ -38,17 +45,27 @@ The Brat CLI is the harness control plane. It orchestrates roles and uses Grit f
 - `brat feed --once|--follow [--timeout <ms>]`
 - `brat lock status [--json]`
 - `brat lock acquire --resource <R> --ttl 15m`
+- `brat lock renew --resource <R> --ttl 15m`
 - `brat lock release --resource <R>`
 - `brat doctor --check|--rebuild`
 - `brat sync --pull|--push`
 - `brat export --format md|json`
+- `brat config validate`
 
 ## Output
 
 - `--json` is supported on all read commands
 - Errors return structured details
 - `brat status --json` includes an `interventions` array with recommended remediation commands (see `docs/usability.md`).
+- `brat status --json --all-repos` returns a `repos` array (see `docs/brat-status-schema.md`).
 
 ## Relationship to Grit
 
-Brat reads and writes Grit issues, comments, labels, and locks. It never writes tracked files for metadata. `brat init` wraps `grit init` for repo enablement.
+Brat reads and writes Grit issues, comments, labels, and locks. It never writes tracked files for metadata.
+
+`brat init` behavior:
+
+- Initializes the Grit ledger (equivalent to `grit init`)
+- Creates `.brat/config.toml` if missing (unless `--no-config`)
+- Starts `bratd` unless `--no-daemon`
+- Optionally creates the tmux control room (unless `--no-tmux`)

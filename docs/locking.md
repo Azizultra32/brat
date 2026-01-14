@@ -57,3 +57,12 @@ A lock namespace is a prefix embedded in the resource string (for example `repo:
 - Release: push a commit with expiry=0
 - Status: `grit lock status` reports current locks and conflicts
 - GC: `grit lock gc` removes expired locks locally
+
+## Brat enforcement points
+
+When lock policy is `require`, Brat must acquire locks before:
+
+- Editing shared paths (from task `Paths`)
+- Starting a merge attempt in Refinery
+
+If a required lock cannot be acquired, Brat must surface an intervention with remediation instructions.

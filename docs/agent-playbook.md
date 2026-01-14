@@ -7,7 +7,7 @@ This repository uses Brat as the primary CLI and Grit as the substrate for task 
 - Use `--json` for all reads.
 - Do not run interactive commands (no editor prompts).
 - Do not force-push `refs/grit/*`.
-- On inconsistencies, run `grit doctor --json` and follow the plan.
+- On inconsistencies, run `brat doctor --check --json` and follow the plan.
 
 ## Startup routine
 
