@@ -36,9 +36,17 @@
 ## Milestone 5: Harness integration
 
 - Map harness tasks to Grit issues and labels
+- State machine spec and implementation (see `docs/state-machine.md`)
+- Session reconciliation on startup and crash recovery
+- Observability contract (exit code, reason, last logs)
+- Non-blocking UX contract for harness commands
 - Witness/Refinery workflows post updates as Grit comments
 - Worktree manager for polecats
 - Engine integration for session lifecycle
+- Merge queue policy + retry rules
+- Lock discipline (`path:` and `repo:` usage)
+- Control room UX for health, sessions, queue, and locks
+- End-to-end integration tests (convoy-like flow)
 
 ## Milestone 6: Hardening
 

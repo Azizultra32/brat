@@ -1,28 +1,40 @@
 # Roles
 
-Gems Town preserves the Gastown role topology. Roles are behavioral conventions that emit explicit actions via Grit issues, comments, labels, and locks.
+Brat preserves the Gastown role topology. Roles are behavioral conventions that emit explicit actions via Grit issues, comments, labels, and locks.
 
 ## Mayor (control plane)
 
-- Creates task issues in Grit
+- Creates convoys and tasks as Grit issues
 - Assigns tasks and updates labels/state
 - Monitors status via Grit queries
+- Never manages processes directly beyond user UX
 
 ## Witness (worker controller)
 
-- Spawns agent sessions (polecats)
-- Monitors heartbeats and progress
-- Posts session updates as Grit comments or labels
+- Turns intent into worker sessions:
+  - decides how many polecats
+  - spawns via the engine adapter
+  - monitors heartbeats and progress
+  - posts lifecycle updates as Grit comments or labels
+- If `bratd` is absent: `brat witness run` can execute the controller once
 
 ## Refinery (integration controller)
 
-- Consumes completed task outputs
-- Manages merge queue policy
+- Consumes completed task outputs and manages the merge queue
+- Owns merge policy (parallelism, rebase strategy, required checks)
 - Posts merge results as Grit updates (labels, comments, links)
 
 ## Deacon (janitor/reconciler)
 
 - Expires or cleans up stale locks
-- Detects orphan sessions
+- Detects orphan sessions (no heartbeat)
 - Rebuilds projections if needed
 - Syncs refs with remotes
+- Emits periodic health summaries
+
+## Session types (non-roles)
+
+Session types describe how a running process is managed. They are not roles.
+
+- Polecat: ephemeral worker session managed by Witness
+- Crew: user-owned persistent session with user-controlled lifecycle

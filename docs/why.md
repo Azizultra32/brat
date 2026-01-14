@@ -1,4 +1,4 @@
-# Why Gems Town (Grit-backed)
+# Why Brat (Grit-backed)
 
 ## What it avoids
 
@@ -9,7 +9,7 @@
    - Repair is monotonic (rebuild projections), never rewrite WAL refs.
 
 3. Daemon-required correctness
-   - Every CLI command is a complete transaction; the daemon is optional.
+   - Every CLI command is a complete transaction; `gritd` is optional and `bratd` is not required for correctness.
 
 4. Branch-topology heuristics
    - Coordination state is not encoded in branches; merges are set-union of events.
@@ -30,4 +30,4 @@
 ## Positioning lines
 
 - Crisp claim: We avoid most Gastown issues by removing git-as-mutable-database and replacing it with an append-only WAL in refs plus rebuildable derived state.
-- Brutally honest: Gastown showed the shape of the solution. Gems Town fixes the parts that break in production.
+- Brutally honest: Gastown showed the shape of the solution. Brat fixes the parts that break in production.

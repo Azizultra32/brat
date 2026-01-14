@@ -1,6 +1,6 @@
 # Agent Playbook
 
-This repository uses Grit as the canonical task and memory system for both humans and agents.
+This repository uses Brat as the primary CLI and Grit as the substrate for task and memory state.
 
 ## Non-interactive contract
 
@@ -13,9 +13,9 @@ This repository uses Grit as the canonical task and memory system for both human
 
 Run at the beginning of each session:
 
-- `grit sync --pull --json`
-- `grit issue list --state open --label agent:todo --json`
-- `grit issue list --state open --label priority:P0 --json`
+- `brat sync --pull --json`
+- `brat task list --label agent:todo --json`
+- `brat task list --label priority:P0 --json`
 
 Select exactly one issue at a time.
 
@@ -45,9 +45,9 @@ After each milestone, post a checkpoint comment:
 
 Acquire a lock when editing shared or risky areas:
 
-- `grit lock acquire --resource "path:<FILE>" --ttl 15m --json`
-- `grit lock renew --resource "path:<FILE>" --ttl 15m --json`
-- `grit lock release --resource "path:<FILE>" --json`
+- `brat lock acquire --resource "path:<FILE>" --ttl 15m --json`
+- `brat lock renew --resource "path:<FILE>" --ttl 15m --json`
+- `brat lock release --resource "path:<FILE>" --json`
 
 If a lock is unavailable, pick another issue or coordinate in comments.
 
@@ -56,5 +56,5 @@ If a lock is unavailable, pick another issue or coordinate in comments.
 Before closing:
 
 - Post verification notes (commands + expected output)
-- `grit issue close <ID> --reason done --json`
-- `grit sync --push --json`
+- `brat task close <ID> --reason done --json`
+- `brat sync --push --json`

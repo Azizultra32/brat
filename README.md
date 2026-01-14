@@ -1,6 +1,6 @@
-# Gems Town (Grit-backed)
+# Brat (Grit-backed)
 
-Gems Town is an autonomous multi-agent coding harness. It uses Grit as the substrate for tasks and memory: an append-only event log in git refs plus a local materialized view.
+Brat is an autonomous multi-agent coding harness. It uses Grit as the substrate for tasks and memory: an append-only event log in git refs plus a local materialized view.
 
 This repository contains the design, data model, and implementation roadmap for the harness and its Grit integration.
 
@@ -9,7 +9,7 @@ This repository contains the design, data model, and implementation roadmap for 
 - Keep state local, auditable, and diffable in git.
 - Avoid worktree conflicts and tracked-file churn.
 - Make merges deterministic and non-destructive.
-- Require no daemon for correctness; daemon is only a performance accelerator.
+- Require no daemon for correctness; `gritd` is optional and `bratd` runs by default for UX but is not required for correctness.
 
 ## Core design (one screen)
 
@@ -26,7 +26,8 @@ This repository contains the design, data model, and implementation roadmap for 
 - `libgrit-ipc`: rkyv schemas + async-nng IPC
 - `grit`: CLI
 - `gritd`: optional daemon
-- `gt`: harness CLI (roles, swarm, control room)
+- `brat`: harness CLI (roles, swarm, control room)
+- `bratd`: harness daemon (role supervisor + tmux control room)
 
 ## Docs
 
@@ -42,11 +43,24 @@ Substrate (Grit):
 - `docs/agent-playbook.md`
 - `docs/locking.md`
 - `docs/operations.md`
+- `docs/grit-mapping.md`
 
-Harness (Gems Town):
+Harness (Brat):
 - `docs/roles.md`
 - `docs/worktrees.md`
 - `docs/engine.md`
+- `docs/convoy-task-schema.md`
+- `docs/session-event-schema.md`
+- `docs/label-glossary.md`
+- `docs/canonical-spec.md`
+- `docs/brat-cli.md`
+- `docs/usability.md`
+- `docs/multi-repo.md`
+- `docs/tmux-bootstrap.sh`
+- `docs/bratd.md`
+- `docs/harness-config.md`
+- `docs/gastown-gap-closure.md`
+- `docs/state-machine.md`
 - `docs/why.md`
 - `docs/naming.md`
 - `docs/acceptance-tests.md`

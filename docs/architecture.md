@@ -2,11 +2,11 @@
 
 ## Overview
 
-Gems Town is a multi-agent harness backed by Grit for task and memory storage. The harness provides roles, swarming, and orchestration UX. Grit provides the append-only ledger, deterministic projections, and optional daemon.
+Brat is a multi-agent harness backed by Grit for task and memory storage. The harness provides roles, swarming, and orchestration UX. Grit provides the append-only ledger, deterministic projections, and an optional daemon (`gritd`); Brat runs `bratd` by default for UX.
 
 ## Layers
 
-1. **Harness layer (Gems Town)**
+1. **Harness layer (Brat)**
    - Roles: Mayor, Witness, Refinery, Deacon
    - Swarm orchestration and control room UX
    - Uses Grit issues, comments, labels, and locks for coordination
@@ -16,11 +16,11 @@ Gems Town is a multi-agent harness backed by Grit for task and memory storage. T
    - Local materialized view in `.git/grit/actors/<actor_id>/sled/`
    - Deterministic projections from the WAL, values encoded with `rkyv`
 
-3. **Optional daemon (performance only)**
+3. **Grit daemon (optional, performance only)**
    - Background fetch/push
    - Warm cache and pub/sub notifications
 
-Correctness never depends on the daemon; the CLI can always rebuild state from the WAL.
+Correctness never depends on `gritd`; the CLI can always rebuild state from the WAL. `bratd` runs by default for UX but is not required for correctness.
 
 ## Components
 
@@ -29,7 +29,8 @@ Correctness never depends on the daemon; the CLI can always rebuild state from t
 - `libgrit-ipc`: shared IPC message schema (rkyv)
 - `grit`: CLI frontend
 - `gritd`: daemon (optional)
-- `gt`: harness CLI (roles, swarm, control room)
+- `brat`: harness CLI (roles, swarm, control room)
+- `bratd`: harness daemon (role supervisor + tmux control room)
 
 ## Data flow
 

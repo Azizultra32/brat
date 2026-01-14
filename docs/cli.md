@@ -4,7 +4,7 @@
 
 - Non-interactive by default
 - Structured output always available (`--json`)
-- No daemon required for correctness
+- No `gritd` required for correctness
 
 ## Grit command overview
 
@@ -50,4 +50,4 @@
 
 ## Harness integration
 
-Gems Town roles and automation use the Grit CLI (or libraries) to create and update issues, comments, labels, and locks. The harness never writes tracked files for metadata.
+Brat roles and automation use the Grit CLI (or libraries) to create and update issues, comments, labels, and locks. The harness never writes tracked files for metadata.
