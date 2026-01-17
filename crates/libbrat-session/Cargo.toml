@@ -1,0 +1,16 @@
+[package]
+name = "libbrat-session"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+libbrat-engine.workspace = true
+libbrat-grit.workspace = true
+libbrat-worktree.workspace = true
+
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
+async-trait.workspace = true
+chrono.workspace = true
+rand.workspace = true
+sha2.workspace = true

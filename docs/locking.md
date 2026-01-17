@@ -10,11 +10,13 @@ Grit uses lease-based locks stored as git refs. Locks are optional and designed 
 
 ## Lock policy
 
-Lock policy is configured in `.git/grit/config.toml`:
+Grit substrate lock policy is configured in `.git/grit/config.toml`:
 
 - `off`: no lock checks
 - `warn` (default): warn on conflicts, but continue
 - `require`: block write commands if a conflicting lock exists
+
+Brat has its own independent lock enforcement in `.brat/config.toml` (see `docs/harness-config.md`). The harness may apply stricter policies than the substrate.
 
 When `require` is enabled, the CLI must check locks before write operations such as:
 

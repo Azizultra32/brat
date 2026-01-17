@@ -47,10 +47,17 @@ The Brat CLI is the harness control plane. It orchestrates roles and uses Grit f
 - `brat lock acquire --resource <R> --ttl 15m`
 - `brat lock renew --resource <R> --ttl 15m`
 - `brat lock release --resource <R>`
-- `brat doctor --check|--rebuild`
+- `brat doctor --check|--rebuild` (see note below)
 - `brat sync --pull|--push`
 - `brat export --format md|json`
 - `brat config validate`
+
+## Doctor command
+
+- `brat doctor --check`: read-only harness health validation
+- `brat doctor --rebuild`: rebuilds harness state (calls `grit rebuild` internally)
+
+For substrate-level health checks, use `grit doctor --fix` directly.
 
 ## Output
 

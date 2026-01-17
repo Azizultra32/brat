@@ -40,6 +40,7 @@ required_checks = ["tests"]
 merge_retry_limit = 2
 
 [locks]
+# Brat-level lock enforcement (independent of Grit's .git/grit/config.toml)
 policy = "warn" # off|warn|require
 
 [tmux]

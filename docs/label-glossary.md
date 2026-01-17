@@ -56,3 +56,11 @@ This doc defines the canonical labels used by Brat when writing to Grit. Labels 
 - `needs-ack`
 - `ack:<actor_id>`
 - `urgency:low|med|high`
+
+## Lock resources
+
+Lock resource strings use namespace prefixes. See `docs/locking.md` for full details.
+
+- `repo:global` - repo-wide lock
+- `path:<path>` - file or directory lock
+- `issue:<id>` - issue-scoped lock

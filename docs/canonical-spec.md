@@ -69,6 +69,7 @@ role = "witness"
 session_type = "polecat"
 engine = "codex"
 worktree = ".grit/worktrees/polecat-3"
+pid = 12345
 started_ts = 1700000000000
 last_heartbeat_ts = 1700000005000
 exit_code = null

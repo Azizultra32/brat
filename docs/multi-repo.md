@@ -20,7 +20,7 @@ Brat supports multi-repo projects by mirroring convoys across repos. Each repo h
 - Aggregation is possible via shared `convoy_id`.
 - No cross-repo transaction needed.
 
-## Default behavior
+## Mirror creation
 
 - `brat convoy create --mirror --repos <paths>` creates the convoy in all specified repos.
 - The same `convoy_id` is used everywhere.

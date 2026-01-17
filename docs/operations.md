@@ -12,7 +12,7 @@ Checks include:
 - Remote refs are reachable (optional)
 - Locks are not stale (optional)
 
-`grit doctor --apply` only runs safe local actions and never pushes refs:
+`grit doctor --fix` only runs safe local actions and never pushes refs:
 
 - rebuild local DB
 - fetch refs

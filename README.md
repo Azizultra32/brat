@@ -19,13 +19,16 @@ This repository contains the design, data model, and implementation roadmap for 
 - Sync is `git fetch/push refs/grit/*` with monotonic fast-forward only.
 - Conflicts are resolved by event union + deterministic projection rules.
 
-## Repository layout (planned)
+## Repository layout
 
+**Grit (substrate)** - Implemented in separate repo, installed as `grit` CLI:
 - `libgrit-core`: event types, hashing, projections, sled store
 - `libgrit-git`: WAL commits, ref sync, snapshots
 - `libgrit-ipc`: rkyv schemas + async-nng IPC
 - `grit`: CLI
 - `gritd`: optional daemon
+
+**Brat (harness)** - This repo (in design):
 - `brat`: harness CLI (roles, swarm, control room)
 - `bratd`: harness daemon (role supervisor + tmux control room)
 
@@ -70,4 +73,9 @@ Harness (Brat):
 
 ## Status
 
-Design-first. The docs define the target architecture and implementation milestones.
+| Component | Status |
+|-----------|--------|
+| Grit substrate | **Complete** (separate repo, `grit` CLI available) |
+| Brat harness | **In design** (this repo) |
+
+The Grit substrate provides the append-only event log, projections, sync, locks, and daemon. Brat builds the multi-agent harness on top. See `docs/roadmap.md` for detailed milestone tracking.
