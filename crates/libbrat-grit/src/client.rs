@@ -15,9 +15,14 @@ use crate::types::{
     SessionType, Task, TaskStatus,
 };
 
+/// Expected Grit CLI JSON schema version.
+const EXPECTED_GRIT_SCHEMA_VERSION: u32 = 1;
+
 /// JSON envelope from Grit CLI responses (used by lock commands).
 #[derive(Debug, Deserialize)]
 struct JsonResponse<T> {
+    #[serde(default)]
+    schema_version: Option<u32>,
     #[serde(default)]
     #[allow(dead_code)] // Used by Grit but not checked in our code
     ok: bool,
@@ -772,6 +777,16 @@ impl GritClient {
                             continue;
                         }
                         return Err(GritError::CommandFailed(error.message));
+                    }
+                    // Check schema version for compatibility
+                    if let Some(version) = env.schema_version {
+                        if version != EXPECTED_GRIT_SCHEMA_VERSION {
+                            eprintln!(
+                                "Warning: Grit schema version mismatch (expected {}, got {}). \
+                                 Consider updating brat or grit.",
+                                EXPECTED_GRIT_SCHEMA_VERSION, version
+                            );
+                        }
                     }
                     return env
                         .data

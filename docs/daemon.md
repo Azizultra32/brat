@@ -1,94 +1,142 @@
-# Daemon
+# Daemons
 
-The daemon (`gritd`) is optional and exists only to improve performance and coordination. Correctness never depends on it.
+Brat uses two optional daemons: `gritd` (Grit substrate) and `bratd` (Brat harness).
 
-## Responsibilities
+## Grit Daemon (gritd)
+
+The Grit daemon is optional and exists only to improve performance. **Correctness never depends on it.**
+
+### Responsibilities
 
 - Maintain a warm materialized view for fast reads
-- Run background sync (`fetch`/`push` of `refs/grit/*`)
-- Create snapshots opportunistically when thresholds are met
-- Emit notifications (new events, sync status, lock changes)
+- Handle concurrent CLI requests efficiently
+- Refresh daemon lock heartbeat
 
-## Non-responsibilities
+### Non-Responsibilities
 
 - Never rewrites refs or force-pushes
 - Never writes to the working tree
-- Never becomes required for correctness
+- **No background sync** (sync is always explicit via `grit sync`)
 
-## Multi-repo and multi-actor
+### Auto-Spawn
 
-The daemon may manage multiple repositories and multiple actors simultaneously. Each managed actor is isolated by its data directory.
+Grit CLI auto-spawns `gritd` on first command:
 
-Key rule:
+- Default idle timeout: 5 minutes
+- Use `--no-daemon` to force local execution
+- Use `grit daemon start --idle-timeout <secs>` for custom timeout
 
-- Only one process may access a given actor data dir at a time. If the daemon owns a data dir, the CLI must route all commands for that actor through the daemon and must not open the DB directly.
+See [Grit daemon documentation](https://github.com/neul-labs/grit/blob/main/docs/daemon.md) for details.
 
-## Ownership and routing rules (tight)
+---
 
-1. **Detect daemon for (repo, actor).** If present, route all commands via IPC.
-2. **If no daemon is present**, the CLI takes ownership of the actor data dir and runs locally.
-3. **If a daemon lock is present and unexpired but IPC is unreachable**, the CLI must refuse to use that data dir and instruct the user to stop the daemon or select a different actor/data dir.
+## Brat Daemon (bratd)
 
-## Ownership marker (required)
+The Brat daemon provides the HTTP API for the web UI and coordinates multi-repo sessions.
 
-Each actor data dir has an ownership marker file used for mutual exclusion:
+### Responsibilities
 
-- Path: `.git/grit/actors/<actor_id>/daemon.lock`
-- Format: JSON
+- Serve REST API endpoints for convoys, tasks, sessions, and Mayor
+- Track activity for idle shutdown (default: 15 minutes)
+- Manage multi-repo state
 
-Example:
+### Commands
 
-```json
-{
-  "pid": 12345,
-  "started_ts": 1700000000000,
-  "repo_root": "/path/to/repo",
-  "actor_id": "<hex-16-bytes>",
-  "host_id": "<stable-host-id>",
-  "ipc_endpoint": "ipc://.../gritd.sock",
-  "lease_ms": 30000,
-  "last_heartbeat_ts": 1700000000000,
-  "expires_ts": 1700000030000
-}
+| Command | Description |
+|---------|-------------|
+| `brat daemon start` | Start in background |
+| `brat daemon stop` | Stop gracefully |
+| `brat daemon status` | Check if running |
+| `brat daemon restart` | Restart with new settings |
+| `brat daemon logs` | View log output |
+
+### Options
+
+```bash
+brat daemon start [OPTIONS]
+
+Options:
+  -p, --port <PORT>           Port to listen on [default: 3000]
+      --idle-timeout <SECS>   Idle timeout in seconds (0 = no timeout) [default: 900]
+      --foreground            Run in foreground (don't daemonize)
 ```
 
-Rules:
+### Auto-Start
 
-- The daemon creates the lock on startup and removes it on clean shutdown.
-- The daemon refreshes the lock before `expires_ts` (heartbeat).
-- The CLI checks for `daemon.lock` before opening the DB.
-- If the lock exists and **is unexpired**, the CLI must not open the DB directly.
-- If the lock exists, is unexpired, and IPC is reachable, the CLI routes all commands through the daemon.
-- If the lock exists but is expired, the CLI may take ownership by replacing the lock.
+Bratd auto-starts when you run commands that need it:
 
-Recommended model:
+- `brat status`
+- `brat convoy ...`
+- `brat task ...`
+- `brat session ...`
+- `brat mayor ...`
+- `brat witness ...`
+- `brat refinery ...`
 
-- `gritd` runs as a supervisor and spawns one worker per `(repo, actor_id)`.
-- Each worker owns:
-  - the actor data dir
-  - its WAL sync loop
-  - its snapshot policy
+Use `--no-daemon` to disable auto-start for scripting:
 
-## IPC behavior
+```bash
+brat --no-daemon status
+```
 
-- `REQ/REP` for command execution (`issue create`, `list`, `sync`, `doctor`, `snapshot`)
-- `PUB/SUB` for notifications
-- `SURVEY` for daemon discovery
+### State Files
 
-If IPC is unavailable and **no daemon lock is present** for the selected data dir, the CLI executes locally using its selected `--data-dir`.
+The daemon stores state in `~/.brat/`:
 
-## Discovery and routing
+| File | Purpose |
+|------|---------|
+| `bratd.pid` | Process ID of running daemon |
+| `bratd.log` | Daemon log output |
 
-- `grit` checks for a daemon serving the current repo and actor context.
-- If present, `grit` routes all commands through it for that actor.
-- If absent, `grit` executes locally and takes ownership of the actor data dir.
+---
 
-## CLI integration
+## Relationship
 
-- `grit daemon status [--json]` reports daemon presence and managed `(repo, actor)` workers
-- `grit daemon stop` requests a graceful shutdown of the global daemon
+```
++----------------------------------------------------------+
+|                    Brat CLI (brat)                        |
++----------------------------------------------------------+
+|                 Brat Daemon (bratd)                       |
+|   HTTP API | Multi-repo | Session tracking | Mayor        |
++----------------------------------------------------------+
+|                 Grit CLI (grit)                           |
++----------------------------------------------------------+
+|              Grit Daemon (gritd) [optional]               |
+|         Warm cache | Concurrent access | IPC              |
++----------------------------------------------------------+
+|                    Git Repository                         |
+|         refs/grit/wal | refs/grit/locks | sled           |
++----------------------------------------------------------+
+```
 
-## Failure behavior
+Both daemons are optional. All commands work without them (standalone mode).
 
-- If a daemon worker crashes, the CLI can fall back to local execution after the lock/ownership is released.
-- If background sync fails, the daemon reports the error but never rewrites history.
+---
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BRAT_DAEMON_PORT` | Override daemon port | 3000 |
+| `BRAT_DAEMON_IDLE_TIMEOUT` | Override idle timeout (seconds) | 900 |
+| `BRAT_NO_DAEMON` | Disable auto-start globally | false |
+
+---
+
+## Failure Behavior
+
+| Failure | Recovery |
+|---------|----------|
+| bratd can't start | CLI commands still work (standalone mode) |
+| Auto-start fails | Warning shown, command continues |
+| bratd crashes | Restart with `brat daemon start` |
+| gritd crashes | Lock expires, CLI takes over automatically |
+
+---
+
+## Interaction with Grit
+
+- Bratd uses Grit as the source of truth for all state
+- All convoy/task/session state stored in Grit issues and comments
+- If `gritd` is running, bratd benefits from its warm cache
+- Bratd works without `gritd` by using Grit CLI directly
