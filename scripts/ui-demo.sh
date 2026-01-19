@@ -23,7 +23,7 @@ NC='\033[0m' # No Color
 cleanup() {
     echo ""
     echo -e "${YELLOW}Shutting down servers...${NC}"
-    [ ! -z "$API_PID" ] && kill $API_PID 2>/dev/null
+    "$BRAT_BIN" daemon stop 2>/dev/null || true
     [ ! -z "$UI_PID" ] && kill $UI_PID 2>/dev/null
     echo -e "${GREEN}Done.${NC}"
 }
@@ -58,17 +58,19 @@ echo -e "${GREEN}  BRAT UI DEMO${NC}"
 echo -e "${GREEN}================================${NC}"
 echo ""
 
-# Start API server
-echo -e "${YELLOW}Starting brat API server on port 3000...${NC}"
-"$BRAT_BIN" api &
-API_PID=$!
-sleep 2
+# Start daemon
+echo -e "${YELLOW}Starting brat daemon on port 3000...${NC}"
+"$BRAT_BIN" daemon start
+sleep 1
 
-# Check if API started successfully
-if ! kill -0 $API_PID 2>/dev/null; then
-    echo -e "${RED}Failed to start API server${NC}"
+# Check if daemon started successfully
+if ! "$BRAT_BIN" daemon status --quiet 2>/dev/null; then
+    echo -e "${RED}Failed to start daemon${NC}"
+    echo -e "${YELLOW}Trying 'brat daemon logs' for details...${NC}"
+    "$BRAT_BIN" daemon logs -n 20 2>/dev/null || true
     exit 1
 fi
+echo -e "${GREEN}Daemon started successfully${NC}"
 
 # Start UI dev server
 echo -e "${YELLOW}Starting brat-ui dev server on port 5173...${NC}"
@@ -86,8 +88,11 @@ fi
 echo ""
 echo -e "${GREEN}Servers are running:${NC}"
 echo ""
-echo -e "  API Server: ${GREEN}http://localhost:3000${NC}"
-echo -e "  UI Server:  ${GREEN}http://localhost:5173${NC}"
+echo -e "  Daemon (bratd): ${GREEN}http://localhost:3000${NC}"
+echo -e "  UI Server:      ${GREEN}http://localhost:5173${NC}"
+echo ""
+echo -e "  Daemon status:  ${YELLOW}brat daemon status${NC}"
+echo -e "  Daemon logs:    ${YELLOW}brat daemon logs${NC}"
 echo ""
 echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop"
 echo ""

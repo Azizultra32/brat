@@ -43,11 +43,14 @@ cleanup() {
     if [ -n "$BRAT_BIN" ] && [ -d "/tmp/mayor-test-repo" ]; then
         cd /tmp/mayor-test-repo 2>/dev/null && "$BRAT_BIN" mayor stop 2>/dev/null || true
     fi
-    # Kill UI processes if started
-    [ ! -z "$API_PID" ] && kill $API_PID 2>/dev/null || true
+    # Stop daemon if we started it
+    [ "$DAEMON_STARTED" = true ] && "$BRAT_BIN" daemon stop 2>/dev/null || true
+    # Kill UI process if started
     [ ! -z "$UI_PID" ] && kill $UI_PID 2>/dev/null || true
 }
 trap cleanup EXIT
+
+DAEMON_STARTED=false
 
 # Configuration
 TEST_DIR="/tmp/mayor-test-repo"
@@ -155,18 +158,19 @@ start_ui() {
         npm install --silent
     fi
 
-    # Start API server
-    info "Starting brat API server on port 3000..."
-    "$BRAT_BIN" api > /tmp/brat-api.log 2>&1 &
-    API_PID=$!
-    sleep 2
+    # Start daemon (bratd)
+    info "Starting brat daemon on port 3000..."
+    "$BRAT_BIN" daemon start > /tmp/brat-daemon.log 2>&1
+    DAEMON_STARTED=true
+    sleep 1
 
-    if ! kill -0 $API_PID 2>/dev/null; then
-        echo -e "${RED}  ✗ Failed to start API server${NC}"
-        cat /tmp/brat-api.log
+    # Check if daemon is running
+    if ! "$BRAT_BIN" daemon status --quiet 2>/dev/null; then
+        echo -e "${RED}  ✗ Failed to start daemon${NC}"
+        cat /tmp/brat-daemon.log
         return 1
     fi
-    success "API server running (PID: $API_PID)"
+    success "Daemon running (use 'brat daemon status' to check)"
 
     # Start UI dev server
     info "Starting UI dev server on port 5173..."

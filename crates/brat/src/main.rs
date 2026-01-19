@@ -2,6 +2,7 @@ mod api;
 mod cli;
 mod commands;
 mod context;
+mod daemon;
 mod error;
 mod output;
 mod workflows;
@@ -9,6 +10,7 @@ mod workflows;
 use clap::Parser;
 
 use cli::{Cli, Command};
+use daemon::DaemonManager;
 use error::BratError;
 use output::output_error;
 
@@ -24,7 +26,32 @@ async fn main() {
     }
 }
 
+/// Check if the command benefits from having the daemon running.
+fn should_auto_start_daemon(cmd: &Command) -> bool {
+    matches!(
+        cmd,
+        Command::Status(_)
+            | Command::Convoy(_)
+            | Command::Task(_)
+            | Command::Session(_)
+            | Command::Mayor(_)
+            | Command::Witness(_)
+            | Command::Refinery(_)
+    )
+}
+
 async fn run_command(cli: &Cli) -> Result<(), BratError> {
+    // Auto-start daemon if needed and not disabled
+    if !cli.no_daemon && should_auto_start_daemon(&cli.command) {
+        let manager = DaemonManager::new();
+        if let Err(e) = manager.ensure_running() {
+            // Log warning but don't fail - commands work without daemon
+            if !cli.quiet && !cli.json {
+                eprintln!("Warning: Could not start daemon: {}", e);
+            }
+        }
+    }
+
     match &cli.command {
         Command::Init(args) => commands::init::run(cli, args),
         Command::Status(args) => commands::status::run(cli, args),
@@ -38,6 +65,7 @@ async fn run_command(cli: &Cli) -> Result<(), BratError> {
         Command::Api(args) => run_api_server(args).await,
         Command::Workflow(cmd) => commands::workflow::run(cli, cmd),
         Command::Mayor(cmd) => commands::mayor::run(cli, cmd).await,
+        Command::Daemon(cmd) => commands::daemon::run(cli, cmd).await,
     }
 }
 
@@ -46,6 +74,11 @@ async fn run_api_server(args: &cli::ApiArgs) -> Result<(), BratError> {
         host: args.host.clone(),
         port: args.port,
         cors_origin: args.cors_origin.clone(),
+        idle_timeout_secs: if args.idle_timeout == 0 {
+            None
+        } else {
+            Some(args.idle_timeout)
+        },
     };
 
     api::run_server(config).await.map_err(|e| {

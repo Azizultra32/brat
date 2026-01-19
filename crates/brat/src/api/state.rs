@@ -3,12 +3,15 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use libbrat_config::BratConfig;
 use libbrat_grit::GritClient;
 use libbrat_worktree::WorktreeManager;
 use tokio::sync::RwLock;
+
+/// Default idle timeout in seconds (15 minutes).
+pub const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 900;
 
 /// Global daemon state shared across all request handlers.
 #[derive(Clone)]
@@ -17,17 +20,46 @@ pub struct DaemonState {
     pub repos: Arc<RwLock<HashMap<String, Arc<RepoContext>>>>,
     /// Daemon start time for uptime calculation.
     pub start_time: Instant,
+    /// Last activity timestamp (updated on each request).
+    pub last_activity: Arc<RwLock<Instant>>,
+    /// Idle timeout duration. If no requests for this long, daemon shuts down.
+    /// None means no idle timeout (run forever).
+    pub idle_timeout: Option<Duration>,
     /// Version string.
     pub version: String,
 }
 
 impl DaemonState {
-    /// Create new daemon state.
-    pub fn new() -> Self {
+    /// Create new daemon state with optional idle timeout.
+    pub fn new(idle_timeout_secs: Option<u64>) -> Self {
         Self {
             repos: Arc::new(RwLock::new(HashMap::new())),
             start_time: Instant::now(),
+            last_activity: Arc::new(RwLock::new(Instant::now())),
+            idle_timeout: idle_timeout_secs.map(Duration::from_secs),
             version: env!("CARGO_PKG_VERSION").to_string(),
+        }
+    }
+
+    /// Record activity (call this on each request).
+    pub async fn touch(&self) {
+        let mut last = self.last_activity.write().await;
+        *last = Instant::now();
+    }
+
+    /// Get seconds since last activity.
+    pub async fn idle_secs(&self) -> u64 {
+        let last = self.last_activity.read().await;
+        last.elapsed().as_secs()
+    }
+
+    /// Check if idle timeout has been exceeded.
+    pub async fn is_idle_timeout_exceeded(&self) -> bool {
+        if let Some(timeout) = self.idle_timeout {
+            let last = self.last_activity.read().await;
+            last.elapsed() > timeout
+        } else {
+            false
         }
     }
 
@@ -100,7 +132,7 @@ impl DaemonState {
 
 impl Default for DaemonState {
     fn default() -> Self {
-        Self::new()
+        Self::new(Some(DEFAULT_IDLE_TIMEOUT_SECS))
     }
 }
 

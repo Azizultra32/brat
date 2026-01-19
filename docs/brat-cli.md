@@ -9,6 +9,14 @@ The Brat CLI is the harness control plane. It orchestrates roles and uses Grit f
 - Safe by default; destructive actions require explicit flags
 - Streaming and waiting require explicit flags (`--follow`, `--wait --timeout`)
 - Single CLI: `brat` wraps Grit; `grit` is for debugging only
+- Daemon auto-starts on commands that benefit from it (disable with `--no-daemon`)
+
+## Global flags
+
+- `--json` - Output in JSON format
+- `--quiet` - Suppress human-readable output
+- `--repo <path>` - Target a specific repository
+- `--no-daemon` - Don't auto-start the daemon (run in standalone mode)
 
 ## Repo scope
 
@@ -51,6 +59,12 @@ The Brat CLI is the harness control plane. It orchestrates roles and uses Grit f
 - `brat sync --pull|--push`
 - `brat export --format md|json`
 - `brat config validate`
+- `brat daemon start [--port <port>] [--idle-timeout <secs>] [--foreground]`
+- `brat daemon stop`
+- `brat daemon status [--json]`
+- `brat daemon restart [--port <port>] [--idle-timeout <secs>]`
+- `brat daemon logs [-n <lines>]`
+- `brat api [--host <host>] [--port <port>] [--idle-timeout <secs>]` (deprecated, use `brat daemon start --foreground`)
 
 ## Doctor command
 

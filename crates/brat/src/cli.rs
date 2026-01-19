@@ -18,6 +18,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub repo: Option<PathBuf>,
 
+    /// Don't auto-start the daemon (run in standalone mode)
+    #[arg(long, global = true)]
+    pub no_daemon: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -67,6 +71,10 @@ pub enum Command {
     /// AI-driven Mayor orchestrator
     #[command(subcommand)]
     Mayor(MayorCommand),
+
+    /// Daemon management (start/stop/status)
+    #[command(subcommand)]
+    Daemon(DaemonCommand),
 }
 
 /// Arguments for the init command
@@ -307,6 +315,11 @@ pub struct ApiArgs {
     /// CORS allowed origin (default: allow all)
     #[arg(long)]
     pub cors_origin: Option<String>,
+
+    /// Idle timeout in seconds. Daemon shuts down after this period of inactivity.
+    /// Set to 0 to disable idle shutdown.
+    #[arg(long, default_value = "900")]
+    pub idle_timeout: u64,
 }
 
 /// Workflow subcommands
@@ -409,4 +422,73 @@ pub struct MayorStopArgs {
     /// Force kill instead of graceful stop
     #[arg(long)]
     pub force: bool,
+}
+
+/// Daemon subcommands
+#[derive(Subcommand, Debug)]
+pub enum DaemonCommand {
+    /// Start the daemon in background
+    Start(DaemonStartArgs),
+
+    /// Stop the daemon
+    Stop(DaemonStopArgs),
+
+    /// Show daemon status
+    Status(DaemonStatusArgs),
+
+    /// Restart the daemon
+    Restart(DaemonRestartArgs),
+
+    /// Show daemon logs
+    Logs(DaemonLogsArgs),
+}
+
+/// Arguments for daemon start
+#[derive(Parser, Debug)]
+pub struct DaemonStartArgs {
+    /// Port to listen on
+    #[arg(long, short = 'p', default_value = "3000")]
+    pub port: u16,
+
+    /// Idle timeout in seconds (0 = no timeout)
+    #[arg(long, default_value = "900")]
+    pub idle_timeout: u64,
+
+    /// Run in foreground (don't daemonize)
+    #[arg(long)]
+    pub foreground: bool,
+}
+
+/// Arguments for daemon stop
+#[derive(Parser, Debug)]
+pub struct DaemonStopArgs {
+    /// Force kill instead of graceful stop
+    #[arg(long)]
+    pub force: bool,
+}
+
+/// Arguments for daemon status
+#[derive(Parser, Debug)]
+pub struct DaemonStatusArgs {
+    // No additional arguments needed
+}
+
+/// Arguments for daemon restart
+#[derive(Parser, Debug)]
+pub struct DaemonRestartArgs {
+    /// Port to listen on
+    #[arg(long, short = 'p', default_value = "3000")]
+    pub port: u16,
+
+    /// Idle timeout in seconds (0 = no timeout)
+    #[arg(long, default_value = "900")]
+    pub idle_timeout: u64,
+}
+
+/// Arguments for daemon logs
+#[derive(Parser, Debug)]
+pub struct DaemonLogsArgs {
+    /// Number of lines to show
+    #[arg(long, short = 'n', default_value = "50")]
+    pub lines: usize,
 }

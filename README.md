@@ -155,9 +155,47 @@ brat status --watch
 | `brat task list` | List all tasks |
 | `brat witness run` | Spawn agents for queued tasks |
 | `brat refinery run` | Process merge queue |
-| `brat api` | Start REST API server (for UI) |
+| `brat daemon start` | Start HTTP API daemon in background |
+| `brat daemon stop` | Stop the daemon |
+| `brat daemon status` | Check if daemon is running |
 
 See [docs/brat-cli.md](docs/brat-cli.md) for the complete reference.
+
+---
+
+## Daemon (bratd)
+
+Brat includes an HTTP API daemon for the web UI and multi-session coordination:
+
+```bash
+# Start daemon (auto-starts on most commands anyway)
+brat daemon start
+
+# Check status
+brat daemon status
+
+# Stop daemon
+brat daemon stop
+```
+
+**Features:**
+- **Auto-start** - Daemon starts automatically when you run commands that need it
+- **Idle shutdown** - Shuts down after 15 minutes of inactivity (configurable)
+- **Multi-repo** - Single daemon manages multiple repositories
+- **Standalone binary** - Also available as `bratd` for direct invocation
+
+```bash
+# Disable auto-start for scripting
+brat --no-daemon status
+
+# Custom port and longer timeout
+brat daemon start --port 8080 --idle-timeout 3600
+
+# Run standalone daemon
+bratd --port 3000 --idle-timeout 900
+```
+
+See [docs/bratd.md](docs/bratd.md) for full documentation.
 
 ---
 
@@ -260,6 +298,7 @@ synthesis:
 |----------|-------------|
 | [Architecture](docs/architecture.md) | System design and data flow |
 | [CLI Reference](docs/brat-cli.md) | Complete command documentation |
+| [Daemon (bratd)](docs/bratd.md) | HTTP API daemon and auto-start |
 | [State Machine](docs/state-machine.md) | Session lifecycle and transitions |
 | [Roles](docs/roles.md) | Mayor, Witness, Refinery, Deacon |
 | [Engine Integration](docs/engine.md) | Adding new AI engines |
