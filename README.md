@@ -1,81 +1,293 @@
-# Brat (Grit-backed)
+# Brat
 
-Brat is an autonomous multi-agent coding harness. It uses Grit as the substrate for tasks and memory: an append-only event log in git refs plus a local materialized view.
+**Orchestrate autonomous AI coding agents with crash-safe, deterministic state management.**
 
-This repository contains the design, data model, and implementation roadmap for the harness and its Grit integration.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 
-## Why
+Brat is a multi-agent harness that coordinates AI coding tools (Claude Code, Aider, Codex, and more) working in parallel on your codebase. Built on [Grit](https://github.com/neul-labs/grit), an append-only event log, Brat ensures that even if agents crash, your coordination state is always recoverable and auditable.
 
-- Keep state local, auditable, and diffable in git.
-- Avoid worktree conflicts and tracked-file churn.
-- Make merges deterministic and non-destructive.
-- Require no daemon for correctness; `gritd` is optional and `bratd` runs by default for UX but is not required for correctness.
+---
 
-## Core design (one screen)
+## See It In Action
 
-- Canonical task/memory state lives in an append-only WAL stored in `refs/grit/wal`.
-- Local state is a deterministic materialized view in `.git/grit/actors/<actor_id>/sled/`.
-- The harness (roles, swarm, tmux control room) reads/writes Grit issues, comments, and labels.
-- Sync is `git fetch/push refs/grit/*` with monotonic fast-forward only.
-- Conflicts are resolved by event union + deterministic projection rules.
+```bash
+# Clone and run the full demo with web UI
+git clone https://github.com/neul-labs/brat && cd brat
+cargo build --release
+./scripts/mayor-demo.sh --with-ui
+```
 
-## Repository layout
+**What the demo shows:**
+1. Creates a sample Python project with intentional bugs
+2. Starts the **Mayor** (AI orchestrator powered by Claude)
+3. Mayor analyzes the codebase and identifies issues by severity
+4. Mayor creates a **Convoy** with **Tasks** for bug fixes
+5. View everything in the web dashboard at **http://localhost:5173**
 
-**Grit (substrate)** - Implemented in separate repo, installed as `grit` CLI:
-- `libgrit-core`: event types, hashing, projections, sled store
-- `libgrit-git`: WAL commits, ref sync, snapshots
-- `libgrit-ipc`: rkyv schemas + async-nng IPC
-- `grit`: CLI
-- `gritd`: optional daemon
+---
 
-**Brat (harness)** - This repo (in design):
-- `brat`: harness CLI (roles, swarm, control room)
-- `bratd`: harness daemon (role supervisor + tmux control room)
+## Supported AI Coding Engines
 
-## Docs
+Brat works with your preferred AI coding tool:
 
-Substrate (Grit):
-- `docs/architecture.md`
-- `docs/actors.md`
-- `docs/data-model.md`
-- `docs/hash-vectors.md`
-- `docs/git-wal.md`
-- `docs/cli.md`
-- `docs/daemon.md`
-- `docs/export-format.md`
-- `docs/agent-playbook.md`
-- `docs/locking.md`
-- `docs/operations.md`
-- `docs/grit-mapping.md`
+| Engine | Command | Highlights |
+|--------|---------|------------|
+| **Claude Code** | `claude` | Native Anthropic integration, session resume |
+| **Aider** | `aider` | Multi-model support (GPT-4, Claude, Gemini, local LLMs) |
+| **OpenCode** | `opencode` | 75+ LLM providers, open-source Claude Code alternative |
+| **Codex** | `codex` | Structured JSON output for parsing |
+| **Continue** | `cn` | IDE integration, CI/CD pipelines |
+| **Gemini** | `gemini` | Google's free tier |
+| **GitHub Copilot** | `gh copilot` | Shell/git command suggestions |
 
-Harness (Brat):
-- `docs/roles.md`
-- `docs/worktrees.md`
-- `docs/engine.md`
-- `docs/convoy-task-schema.md`
-- `docs/session-event-schema.md`
-- `docs/label-glossary.md`
-- `docs/canonical-spec.md`
-- `docs/merge-policy.md`
-- `docs/brat-cli.md`
-- `docs/usability.md`
-- `docs/brat-status-schema.md`
-- `docs/multi-repo.md`
-- `docs/tmux-bootstrap.sh`
-- `docs/bratd.md`
-- `docs/harness-config.md`
-- `docs/gastown-gap-closure.md`
-- `docs/state-machine.md`
-- `docs/why.md`
-- `docs/naming.md`
-- `docs/acceptance-tests.md`
-- `docs/roadmap.md`
+Configure your engine in `.brat/config.toml` and Brat handles the rest.
 
-## Status
+---
 
-| Component | Status |
-|-----------|--------|
-| Grit substrate | **Complete** (separate repo, `grit` CLI available) |
-| Brat harness | **In design** (this repo) |
+## How It Works
 
-The Grit substrate provides the append-only event log, projections, sync, locks, and daemon. Brat builds the multi-agent harness on top. See `docs/roadmap.md` for detailed milestone tracking.
+```
+┌──────────┐         ┌──────────┐         ┌──────────┐
+│  Mayor   │─creates─▶│  Convoy  │─contains─▶│  Tasks   │
+│  (AI)    │         │  (group) │         │  (work)  │
+└──────────┘         └──────────┘         └────┬─────┘
+                                               │
+                     ┌─────────────────────────┘
+                     ▼
+              ┌─────────────┐      ┌─────────────┐
+              │   Witness   │─────▶│  Refinery   │
+              │(spawn agents)│      │(merge work) │
+              └─────────────┘      └─────────────┘
+```
+
+| Role | What It Does |
+|------|--------------|
+| **Mayor** | AI orchestrator that analyzes codebases, breaks down work, and creates convoys/tasks |
+| **Convoy** | A group of related tasks (think: sprint, epic, or feature branch) |
+| **Task** | Individual work item assigned to an AI coding agent |
+| **Witness** | Spawns and monitors coding agent sessions ("polecats") |
+| **Refinery** | Manages the merge queue, runs CI checks, handles integration |
+| **Deacon** | Background janitor: cleans locks, syncs state, detects orphans |
+
+---
+
+## Web UI Dashboard
+
+Brat includes a real-time web dashboard for monitoring and control:
+
+- **Dashboard** - Task status cards (queued, running, blocked, merged)
+- **Convoys** - Create and manage work groups
+- **Tasks** - Filter, assign, and track individual work items
+- **Sessions** - Monitor active AI agents with live log viewer
+- **Mayor Chat** - Interactive interface to communicate with the AI orchestrator
+
+```bash
+# Start the UI
+./scripts/ui-demo.sh
+# Opens http://localhost:5173
+```
+
+---
+
+## Quick Start
+
+### 1. Install
+
+```bash
+# One-line install
+curl -fsSL https://raw.githubusercontent.com/neul-labs/brat/main/install.sh | bash
+
+# Or build from source
+cargo install --path crates/brat
+```
+
+**Prerequisite:** Install [Grit](https://github.com/neul-labs/grit) first:
+```bash
+cargo install --git https://github.com/neul-labs/grit grit
+```
+
+### 2. Initialize Your Repo
+
+```bash
+cd your-project
+grit init      # Initialize Grit substrate
+brat init      # Initialize Brat harness
+```
+
+### 3. Start the Mayor
+
+```bash
+# Start AI orchestrator
+brat mayor start
+
+# Ask it to analyze your code
+brat mayor ask "Analyze src/ and create tasks for any bugs you find"
+
+# Check what it created
+brat status
+```
+
+### 4. Run Agents on Tasks
+
+```bash
+# Spawn AI agents for queued tasks
+brat witness run --once
+
+# Watch progress
+brat status --watch
+```
+
+---
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `brat init` | Initialize harness in current repo |
+| `brat status` | View convoys, tasks, and sessions |
+| `brat mayor start` | Start AI orchestrator session |
+| `brat mayor ask "..."` | Send prompt to Mayor |
+| `brat mayor stop` | Stop Mayor session |
+| `brat convoy create` | Create a new convoy |
+| `brat convoy list` | List all convoys |
+| `brat task add` | Add a task to a convoy |
+| `brat task list` | List all tasks |
+| `brat witness run` | Spawn agents for queued tasks |
+| `brat refinery run` | Process merge queue |
+| `brat api` | Start REST API server (for UI) |
+
+See [docs/brat-cli.md](docs/brat-cli.md) for the complete reference.
+
+---
+
+## Why Brat?
+
+### Problems It Solves
+
+| Problem | How Brat Fixes It |
+|---------|-------------------|
+| **Dirty working trees** | Metadata lives in `refs/grit/*`, never in tracked files |
+| **Silent failures** | All state changes recorded as Grit events, fully observable |
+| **Crash recovery** | Append-only log enables deterministic rebuild from any point |
+| **Daemon dependency** | CLI commands are complete transactions; daemons are optional |
+| **Merge chaos** | Refinery manages queue with configurable policy (rebase/squash/merge) |
+
+### What It Doesn't Solve
+
+We believe in honest positioning:
+
+- **Engine reliability** - API rate limits, auth issues, and vendor outages are outside Brat's control
+- **Merge conflicts** - Real code conflicts still need human judgment
+- **Prompt quality** - Brat orchestrates agents; prompt engineering is your job
+- **CI/CD setup** - Brat integrates with your existing CI, doesn't replace it
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       Your Repository                        │
+├──────────────────────────┬──────────────────────────────────┤
+│  .brat/                  │  refs/grit/wal                   │
+│  ├─ config.toml          │  └─ append-only event log        │
+│  └─ workflows/           │                                  │
+│     ├─ feature.yaml      │  .git/grit/actors/<id>/sled/     │
+│     ├─ fix-bug.yaml      │  └─ local materialized view      │
+│     └─ code-review.yaml  │                                  │
+├──────────────────────────┴──────────────────────────────────┤
+│                    Brat Harness Layer                        │
+│  ┌────────┐ ┌─────────┐ ┌──────────┐ ┌────────┐            │
+│  │ Mayor  │ │ Witness │ │ Refinery │ │ Deacon │            │
+│  └────────┘ └─────────┘ └──────────┘ └────────┘            │
+├─────────────────────────────────────────────────────────────┤
+│                   Grit Substrate Layer                       │
+│  Events • Issues • Labels • Comments • Locks • Sync         │
+├─────────────────────────────────────────────────────────────┤
+│                    AI Engine Adapters                        │
+│  Claude │ Aider │ OpenCode │ Codex │ Continue │ Gemini      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key design principles:**
+- **Append-only correctness** - WAL is immutable; state rebuilds from events
+- **Actor isolation** - Each agent gets its own data directory
+- **Bounded timeouts** - All engine operations have configurable timeouts
+- **Lock discipline** - Resource coordination with TTL-based leases
+
+---
+
+## Workflow Templates
+
+Define reusable workflows in `.brat/workflows/`:
+
+**Sequential workflow** (`feature.yaml`):
+```yaml
+name: feature
+type: workflow
+steps:
+  - id: design
+    title: "Design {{feature}}"
+  - id: implement
+    needs: [design]
+    title: "Implement {{feature}}"
+  - id: test
+    needs: [implement]
+    title: "Test {{feature}}"
+```
+
+**Parallel convoy** (`code-review.yaml`):
+```yaml
+name: code-review
+type: convoy
+legs:
+  - id: correctness
+    title: "Review correctness"
+  - id: security
+    title: "Review security"
+  - id: performance
+    title: "Review performance"
+synthesis:
+  title: "Synthesize review findings"
+```
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | System design and data flow |
+| [CLI Reference](docs/brat-cli.md) | Complete command documentation |
+| [State Machine](docs/state-machine.md) | Session lifecycle and transitions |
+| [Roles](docs/roles.md) | Mayor, Witness, Refinery, Deacon |
+| [Engine Integration](docs/engine.md) | Adding new AI engines |
+| [Workflows](docs/convoy-task-schema.md) | Convoy and task schemas |
+| [Roadmap](docs/roadmap.md) | Current status and planned features |
+
+---
+
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+```bash
+# Development setup
+git clone https://github.com/neul-labs/brat
+cd brat
+cargo build
+cargo test
+```
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <b>Brat</b> is built on <a href="https://github.com/neul-labs/grit">Grit</a> - the append-only substrate for deterministic collaboration.
+</p>
