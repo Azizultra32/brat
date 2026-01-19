@@ -60,6 +60,22 @@ pub fn output_error(cli: &Cli, err: &BratError) {
     }
 }
 
+/// Output a JSON error with code and message (without requiring BratError).
+pub fn output_error_json(cli: &Cli, code: &str, message: &str) {
+    if cli.json {
+        let response: JsonResponse<()> = JsonResponse {
+            schema_version: SCHEMA_VERSION,
+            ok: false,
+            data: None,
+            error: Some(JsonError {
+                code: code.to_string(),
+                message: message.to_string(),
+            }),
+        };
+        eprintln!("{}", serde_json::to_string_pretty(&response).unwrap());
+    }
+}
+
 /// Print a human-readable message (respects --quiet and --json).
 pub fn print_human(cli: &Cli, msg: &str) {
     if !cli.json && !cli.quiet {

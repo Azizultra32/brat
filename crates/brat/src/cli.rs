@@ -56,6 +56,17 @@ pub enum Command {
 
     /// Health check and diagnostics
     Doctor(DoctorArgs),
+
+    /// Start the HTTP API server (bratd daemon)
+    Api(ApiArgs),
+
+    /// Workflow template management
+    #[command(subcommand)]
+    Workflow(WorkflowCommand),
+
+    /// AI-driven Mayor orchestrator
+    #[command(subcommand)]
+    Mayor(MayorCommand),
 }
 
 /// Arguments for the init command
@@ -175,6 +186,11 @@ pub struct WitnessRunArgs {
     /// Skip session reconciliation on startup
     #[arg(long)]
     pub skip_reconcile: bool,
+
+    /// Engine to use for spawning sessions. Overrides config.
+    /// Options: claude-code, codex, opencode, aider, gemini, copilot, continue, shell
+    #[arg(long, short = 'e')]
+    pub engine: Option<String>,
 }
 
 /// Refinery subcommands
@@ -275,4 +291,122 @@ pub struct DoctorArgs {
     /// Rebuild mode (rebuilds harness state)
     #[arg(long, conflicts_with = "check")]
     pub rebuild: bool,
+}
+
+/// Arguments for API server command
+#[derive(Parser, Debug)]
+pub struct ApiArgs {
+    /// Host to bind to
+    #[arg(long, default_value = "127.0.0.1")]
+    pub host: String,
+
+    /// Port to listen on
+    #[arg(long, short = 'p', default_value = "3000")]
+    pub port: u16,
+
+    /// CORS allowed origin (default: allow all)
+    #[arg(long)]
+    pub cors_origin: Option<String>,
+}
+
+/// Workflow subcommands
+#[derive(Subcommand, Debug)]
+pub enum WorkflowCommand {
+    /// List available workflows
+    List(WorkflowListArgs),
+
+    /// Show workflow details
+    Show(WorkflowShowArgs),
+
+    /// Run a workflow
+    Run(WorkflowRunArgs),
+}
+
+/// Arguments for workflow list
+#[derive(Parser, Debug)]
+pub struct WorkflowListArgs {
+    // No additional arguments needed
+}
+
+/// Arguments for workflow show
+#[derive(Parser, Debug)]
+pub struct WorkflowShowArgs {
+    /// Workflow name to show
+    pub name: String,
+}
+
+/// Arguments for workflow run
+#[derive(Parser, Debug)]
+pub struct WorkflowRunArgs {
+    /// Workflow name to run
+    pub name: String,
+
+    /// Variable assignments (key=value)
+    #[arg(long = "var", short = 'v', value_parser = parse_var)]
+    pub vars: Vec<(String, String)>,
+}
+
+/// Parse a key=value variable assignment.
+fn parse_var(s: &str) -> Result<(String, String), String> {
+    let parts: Vec<&str> = s.splitn(2, '=').collect();
+    if parts.len() != 2 {
+        return Err(format!("invalid variable format '{}', expected key=value", s));
+    }
+    Ok((parts[0].to_string(), parts[1].to_string()))
+}
+
+/// Mayor subcommands
+#[derive(Subcommand, Debug)]
+pub enum MayorCommand {
+    /// Start the Mayor orchestrator
+    Start(MayorStartArgs),
+
+    /// Send a message to the Mayor
+    Ask(MayorAskArgs),
+
+    /// Check Mayor status
+    Status(MayorStatusArgs),
+
+    /// View Mayor output
+    Tail(MayorTailArgs),
+
+    /// Stop the Mayor
+    Stop(MayorStopArgs),
+}
+
+/// Arguments for mayor start
+#[derive(Parser, Debug)]
+pub struct MayorStartArgs {
+    /// Initial message/instruction for the Mayor
+    #[arg(long, short = 'm')]
+    pub message: Option<String>,
+}
+
+/// Arguments for mayor ask
+#[derive(Parser, Debug)]
+pub struct MayorAskArgs {
+    /// Message to send to the Mayor
+    pub message: String,
+}
+
+/// Arguments for mayor status
+#[derive(Parser, Debug)]
+pub struct MayorStatusArgs {
+    // No additional arguments needed
+}
+
+/// Arguments for mayor tail
+#[derive(Parser, Debug)]
+pub struct MayorTailArgs {
+    /// Number of lines to show
+    #[arg(long, short = 'n', default_value = "50")]
+    pub lines: usize,
+}
+
+/// Arguments for mayor stop
+#[derive(Parser, Debug)]
+pub struct MayorStopArgs {
+    /// Force kill instead of graceful stop
+    #[arg(long)]
+    pub force: bool,
 }

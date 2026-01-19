@@ -49,6 +49,8 @@ struct SessionState {
 pub struct SessionMonitor<E: Engine + 'static> {
     /// Engine for spawning and controlling sessions.
     engine: Arc<E>,
+    /// Engine name for Grit recording.
+    engine_name: String,
     /// Grit client for session persistence.
     grit: Arc<GritClient>,
     /// Worktree manager for polecat sessions.
@@ -76,6 +78,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
     /// * `config` - Monitor configuration.
     pub fn new(
         engine: E,
+        engine_name: impl Into<String>,
         grit: GritClient,
         worktree_manager: Option<WorktreeManager>,
         config: MonitorConfig,
@@ -85,6 +88,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
 
         Self {
             engine: Arc::new(engine),
+            engine_name: engine_name.into(),
             grit: Arc::new(grit),
             worktree_manager: worktree_manager.map(Arc::new),
             config,
@@ -176,7 +180,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
             task_id,
             role,
             session_type,
-            "shell", // TODO: Get engine name from Engine trait
+            &self.engine_name,
             &worktree_str,
             Some(spawn_result.pid),
         ) {

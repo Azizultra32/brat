@@ -31,11 +31,28 @@
 //! }
 //! ```
 
+pub mod aider;
+pub mod claude_code;
+pub mod codex;
+pub mod continue_dev;
+pub mod copilot;
 pub mod engine;
 pub mod error;
+pub mod gemini;
+pub mod mayor;
+pub mod opencode;
+pub mod platform;
 pub mod shell;
 
 // Re-export public API
+pub use aider::AiderEngine;
+pub use claude_code::ClaudeCodeEngine;
+pub use codex::CodexEngine;
+pub use continue_dev::ContinueEngine;
+pub use copilot::CopilotEngine;
+pub use gemini::GeminiEngine;
+pub use mayor::MayorEngine;
+pub use opencode::OpenCodeEngine;
 pub use engine::{
     Engine, EngineHealth, EngineInput, SessionHandle, SpawnResult, SpawnSpec, StopMode,
     DEFAULT_HEALTH_TIMEOUT_MS, DEFAULT_SEND_TIMEOUT_MS, DEFAULT_SPAWN_RETRY,

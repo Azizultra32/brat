@@ -23,6 +23,18 @@ pub enum EngineError {
     #[error("send failed: {0}")]
     SendFailed(String),
 
+    /// Failed to tail session output.
+    #[error("tail failed: {0}")]
+    TailFailed(String),
+
+    /// Failed to stop session.
+    #[error("stop failed: {0}")]
+    StopFailed(String),
+
+    /// Failed to check session health.
+    #[error("health check failed: {0}")]
+    HealthCheckFailed(String),
+
     /// IO error.
     #[error("io error: {0}")]
     Io(#[from] io::Error),
@@ -37,6 +49,9 @@ impl EngineError {
             EngineError::Timeout(_) => 4,
             EngineError::SessionExited(_) => 5,
             EngineError::SendFailed(_) => 6,
+            EngineError::TailFailed(_) => 8,
+            EngineError::StopFailed(_) => 9,
+            EngineError::HealthCheckFailed(_) => 10,
             EngineError::Io(_) => 7,
         }
     }

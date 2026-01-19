@@ -1,0 +1,10 @@
+#!/bin/sh
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Determine binary name based on OS
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) BINARY="brat.exe" ;;
+    *) BINARY="brat" ;;
+esac
+
+exec "$SCRIPT_DIR/$BINARY" "$@"

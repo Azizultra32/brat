@@ -1,3 +1,4 @@
+mod api;
 mod cli;
 mod commands;
 mod context;
@@ -34,5 +35,20 @@ async fn run_command(cli: &Cli) -> Result<(), BratError> {
         Command::Session(cmd) => commands::session::run(cli, cmd),
         Command::Lock(cmd) => commands::lock::run(cli, cmd),
         Command::Doctor(args) => commands::doctor::run(cli, args),
+        Command::Api(args) => run_api_server(args).await,
+        Command::Workflow(cmd) => commands::workflow::run(cli, cmd),
+        Command::Mayor(cmd) => commands::mayor::run(cli, cmd).await,
     }
+}
+
+async fn run_api_server(args: &cli::ApiArgs) -> Result<(), BratError> {
+    let config = api::server::ServerConfig {
+        host: args.host.clone(),
+        port: args.port,
+        cors_origin: args.cors_origin.clone(),
+    };
+
+    api::run_server(config).await.map_err(|e| {
+        BratError::Other(format!("API server error: {}", e))
+    })
 }

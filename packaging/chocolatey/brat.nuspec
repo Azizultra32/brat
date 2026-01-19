@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>brat</id>
+    <version>0.1.0</version>
+    <title>Brat</title>
+    <authors>Brat Authors</authors>
+    <owners>Brat Authors</owners>
+    <projectUrl>https://github.com/neul-labs/brat</projectUrl>
+    <projectSourceUrl>https://github.com/neul-labs/brat</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/neul-labs/brat/issues</bugTrackerUrl>
+    <docsUrl>https://github.com/neul-labs/brat#readme</docsUrl>
+    <licenseUrl>https://github.com/neul-labs/brat/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <summary>Multi-agent coding orchestrator CLI</summary>
+    <description>Brat is a CLI tool for orchestrating multiple AI coding agents including Claude Code, Codex, Aider, GitHub Copilot, and more. It provides a unified interface for managing AI-assisted coding sessions across different providers.</description>
+    <tags>ai coding agents cli automation developer-tools claude codex aider copilot</tags>
+    <releaseNotes>https://github.com/neul-labs/brat/releases</releaseNotes>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

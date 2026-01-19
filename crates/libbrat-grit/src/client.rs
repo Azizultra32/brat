@@ -15,7 +15,7 @@ use crate::types::{
     SessionType, Task, TaskStatus,
 };
 
-/// JSON envelope from Grit CLI responses.
+/// JSON envelope from Grit CLI responses (used by lock commands).
 #[derive(Debug, Deserialize)]
 struct JsonResponse<T> {
     #[serde(default)]
@@ -27,35 +27,126 @@ struct JsonResponse<T> {
 
 #[derive(Debug, Deserialize)]
 struct JsonError {
+    #[serde(default)]
+    code: String,
     message: String,
 }
 
-/// Response from issue create command.
+/// Convert a byte array to a hex string.
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Issue ID that can be either a hex string or a byte array.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum IssueIdFormat {
+    Hex(String),
+    Bytes(Vec<u8>),
+}
+
+impl IssueIdFormat {
+    fn to_hex(&self) -> String {
+        match self {
+            IssueIdFormat::Hex(s) => s.clone(),
+            IssueIdFormat::Bytes(bytes) => bytes_to_hex(bytes),
+        }
+    }
+}
+
+/// Response from issue create command (new format).
 #[derive(Debug, Deserialize)]
 struct IssueCreateResponse {
-    issue_id: String,
+    issue_id: IssueIdFormat,
+    #[allow(dead_code)]
+    event_id: Option<String>,
 }
 
-/// Response from issue list command.
+/// Raw issue summary from grit issue list (new format).
+#[derive(Debug, Deserialize)]
+struct RawIssueSummary {
+    issue_id: IssueIdFormat,
+    title: String,
+    state: String,
+    labels: Vec<String>,
+    #[serde(default)]
+    assignees: Vec<String>,
+    #[serde(default)]
+    updated_ts: i64,
+    #[serde(default)]
+    comment_count: u32,
+}
+
+impl RawIssueSummary {
+    fn into_grit_issue_summary(self) -> GritIssueSummary {
+        GritIssueSummary {
+            issue_id: self.issue_id.to_hex(),
+            title: self.title,
+            state: self.state,
+            labels: self.labels,
+            updated_ts: self.updated_ts,
+        }
+    }
+}
+
+/// Response from issue list command (new format - no envelope).
 #[derive(Debug, Deserialize)]
 struct IssueListResponse {
-    issues: Vec<GritIssueSummary>,
+    issues: Vec<RawIssueSummary>,
 }
 
-/// Response from issue show command.
+/// Raw issue from grit issue show (new format).
 #[derive(Debug, Deserialize)]
-struct IssueShowResponse {
-    issue: GritIssue,
+struct RawIssue {
+    issue_id: IssueIdFormat,
+    title: String,
+    body: String,
+    state: String,
+    labels: Vec<String>,
+    #[serde(default)]
+    assignees: Vec<String>,
+    #[serde(default)]
+    comments: Vec<RawComment>,
+    #[serde(default)]
+    updated_ts: i64,
+}
+
+/// Raw comment from grit issue show.
+#[derive(Debug, Deserialize)]
+struct RawComment {
+    #[allow(dead_code)]
+    comment_id: Option<IssueIdFormat>,
+    body: String,
+    #[allow(dead_code)]
+    author: Option<String>,
+    #[allow(dead_code)]
+    created_ts: Option<i64>,
+}
+
+impl RawIssue {
+    fn into_grit_issue(self) -> GritIssue {
+        GritIssue {
+            issue_id: self.issue_id.to_hex(),
+            title: self.title,
+            body: self.body,
+            state: self.state,
+            labels: self.labels,
+            updated_ts: self.updated_ts,
+        }
+    }
 }
 
 /// Response from lock acquire command.
 #[derive(Debug, Deserialize)]
 struct LockAcquireResponse {
-    acquired: bool,
+    resource: String,
+    owner: String,
     #[serde(default)]
-    owner: Option<String>,
+    nonce: Option<String>,
     #[serde(default)]
     expires_unix_ms: Option<i64>,
+    #[serde(default)]
+    ttl_seconds: Option<i64>,
 }
 
 /// Result of a lock acquisition attempt.
@@ -112,8 +203,8 @@ impl GritClient {
             args.push(label);
         }
 
-        let response: IssueCreateResponse = self.run_json(&args)?;
-        Ok(response.issue_id)
+        let response: IssueCreateResponse = self.run_json_direct(&args)?;
+        Ok(response.issue_id.to_hex())
     }
 
     /// List issues with optional label filters.
@@ -134,22 +225,26 @@ impl GritClient {
             args.push(label);
         }
 
-        let response: IssueListResponse = self.run_json(&args)?;
-        Ok(response.issues)
+        let response: IssueListResponse = self.run_json_direct(&args)?;
+        Ok(response
+            .issues
+            .into_iter()
+            .map(|r| r.into_grit_issue_summary())
+            .collect())
     }
 
     /// Get a single issue by ID.
     pub fn issue_show(&self, issue_id: &str) -> Result<GritIssue, GritError> {
         let args = vec!["issue", "show", issue_id];
-        let response: IssueShowResponse = self.run_json(&args)?;
-        Ok(response.issue)
+        let response: RawIssue = self.run_json_direct(&args)?;
+        Ok(response.into_grit_issue())
     }
 
     /// Add labels to an issue.
     pub fn issue_label_add(&self, issue_id: &str, labels: &[&str]) -> Result<(), GritError> {
         for label in labels {
-            let args = vec!["issue", "label", "add", issue_id, "--label", label];
-            let _: serde_json::Value = self.run_json(&args)?;
+            let args = vec!["issue", "label", "add", "--label", label, issue_id];
+            let _: serde_json::Value = self.run_json_direct(&args)?;
         }
         Ok(())
     }
@@ -157,9 +252,9 @@ impl GritClient {
     /// Remove labels from an issue.
     pub fn issue_label_remove(&self, issue_id: &str, labels: &[&str]) -> Result<(), GritError> {
         for label in labels {
-            let args = vec!["issue", "label", "remove", issue_id, "--label", label];
+            let args = vec!["issue", "label", "remove", "--label", label, issue_id];
             // Ignore errors for labels that don't exist
-            let _ = self.run_json::<serde_json::Value>(&args);
+            let _ = self.run_json_direct::<serde_json::Value>(&args);
         }
         Ok(())
     }
@@ -167,7 +262,7 @@ impl GritClient {
     /// Add a comment to an issue.
     pub fn issue_comment(&self, issue_id: &str, body: &str) -> Result<(), GritError> {
         let args = vec!["issue", "comment", issue_id, "--body", body];
-        let _: serde_json::Value = self.run_json(&args)?;
+        let _: serde_json::Value = self.run_json_direct(&args)?;
         Ok(())
     }
 
@@ -286,6 +381,8 @@ impl GritClient {
     }
 
     /// Get a task by its Brat task ID.
+    ///
+    /// Unlike `task_list`, this returns the full task including body.
     pub fn task_get(&self, task_id: &str) -> Result<Task, GritError> {
         if !is_valid_task_id(task_id) {
             return Err(GritError::InvalidId(task_id.to_string()));
@@ -294,12 +391,16 @@ impl GritClient {
         let label = format!("task:{}", task_id);
         let issues = self.issue_list(&[&label], None)?;
 
-        issues
+        // Find the task issue
+        let summary = issues
             .into_iter()
             .find(|issue| issue.labels.contains(&"type:task".to_string()))
-            .map(|issue| parse_task_from_summary(&issue))
-            .transpose()?
-            .ok_or_else(|| GritError::NotFound(format!("task {}", task_id)))
+            .ok_or_else(|| GritError::NotFound(format!("task {}", task_id)))?;
+
+        // Fetch full issue to get body
+        let full_issue = self.issue_show(&summary.issue_id)?;
+
+        parse_task_from_full_issue(&summary, &full_issue)
     }
 
     /// Update task status with validation.
@@ -602,22 +703,17 @@ impl GritClient {
     /// If the lock is already held by another actor, `acquired` will be false
     /// and `holder` will contain the current owner.
     pub fn lock_acquire(&self, resource: &str, ttl_ms: i64) -> Result<LockResult, GritError> {
-        let ttl_str = ttl_ms.to_string();
-        let args = vec![
-            "lock",
-            "acquire",
-            "--resource",
-            resource,
-            "--ttl",
-            &ttl_str,
-        ];
+        // Convert milliseconds to seconds (grit now uses --ttl in seconds)
+        let ttl_seconds = (ttl_ms / 1000).max(1);
+        let ttl_str = ttl_seconds.to_string();
+        let args = vec!["lock", "acquire", resource, "--ttl", &ttl_str];
 
         let response: LockAcquireResponse = self.run_json(&args)?;
 
         Ok(LockResult {
-            acquired: response.acquired,
-            resource: resource.to_string(),
-            holder: response.owner,
+            acquired: true, // If we get a response without error, the lock was acquired
+            resource: response.resource,
+            holder: Some(response.owner),
             expires_unix_ms: response.expires_unix_ms,
         })
     }
@@ -626,7 +722,7 @@ impl GritClient {
     ///
     /// This is a best-effort operation; errors are logged but not fatal.
     pub fn lock_release(&self, resource: &str) -> Result<(), GritError> {
-        let args = vec!["lock", "release", "--resource", resource];
+        let args = vec!["lock", "release", resource];
         let _: serde_json::Value = self.run_json(&args)?;
         Ok(())
     }
@@ -636,35 +732,141 @@ impl GritClient {
     // -------------------------------------------------------------------------
 
     /// Run a grit command and parse JSON output.
+    ///
+    /// Retries on db_busy errors up to 3 times with exponential backoff.
     fn run_json<T: DeserializeOwned>(&self, args: &[&str]) -> Result<T, GritError> {
         let mut cmd_args = args.to_vec();
         cmd_args.push("--json");
 
-        let output = Command::new("grit")
-            .args(&cmd_args)
-            .current_dir(&self.repo_root)
-            .output()
-            .map_err(|e| GritError::CommandFailed(format!("failed to run grit: {}", e)))?;
+        let max_retries = 5;
+        let mut last_error = None;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(GritError::CommandFailed(stderr.to_string()));
+        for attempt in 0..max_retries {
+            if attempt > 0 {
+                // Exponential backoff: 100ms, 200ms, 400ms, 800ms
+                std::thread::sleep(std::time::Duration::from_millis(100 << attempt));
+            }
+
+            let output = Command::new("grit")
+                .args(&cmd_args)
+                .current_dir(&self.repo_root)
+                .output()
+                .map_err(|e| GritError::CommandFailed(format!("failed to run grit: {}", e)))?;
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            // Try to parse as JSON envelope
+            let envelope: Result<JsonResponse<T>, _> = serde_json::from_str(&stdout);
+
+            match envelope {
+                Ok(env) => {
+                    if let Some(error) = env.error {
+                        // Check if it's a retryable database lock error
+                        let is_retryable = error.code == "db_busy"
+                            || error.code == "db_error"
+                            || error.message.contains("could not acquire lock")
+                            || error.message.contains("WouldBlock")
+                            || error.message.contains("temporarily unavailable");
+                        if is_retryable && attempt < max_retries - 1 {
+                            last_error = Some(GritError::CommandFailed(error.message));
+                            continue;
+                        }
+                        return Err(GritError::CommandFailed(error.message));
+                    }
+                    return env
+                        .data
+                        .ok_or_else(|| GritError::UnexpectedResponse("missing data in response".into()));
+                }
+                Err(e) => {
+                    if !output.status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        // Check if stderr contains retryable lock indication
+                        let is_retryable = stderr.contains("db_busy")
+                            || stderr.contains("db_error")
+                            || stderr.contains("Database locked")
+                            || stderr.contains("could not acquire lock")
+                            || stderr.contains("WouldBlock")
+                            || stderr.contains("temporarily unavailable");
+                        if is_retryable && attempt < max_retries - 1 {
+                            last_error = Some(GritError::CommandFailed(stderr.to_string()));
+                            continue;
+                        }
+                        return Err(GritError::CommandFailed(stderr.to_string()));
+                    }
+                    return Err(GritError::ParseError(format!(
+                        "failed to parse grit output: {} - raw: {}",
+                        e, stdout
+                    )));
+                }
+            }
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
+        Err(last_error.unwrap_or_else(|| GritError::CommandFailed("max retries exceeded".into())))
+    }
 
-        // Try to parse as JSON envelope
-        let envelope: JsonResponse<T> = serde_json::from_str(&stdout).map_err(|e| {
-            GritError::ParseError(format!("failed to parse grit output: {} - raw: {}", e, stdout))
-        })?;
+    /// Run a grit command and parse the JSON output directly (no envelope wrapper).
+    /// Used for issue commands which now return data directly.
+    fn run_json_direct<T: DeserializeOwned>(&self, args: &[&str]) -> Result<T, GritError> {
+        let mut cmd_args = args.to_vec();
+        cmd_args.push("--json");
 
-        if let Some(error) = envelope.error {
-            return Err(GritError::CommandFailed(error.message));
+        let max_retries = 5;
+        let mut last_error = None;
+
+        for attempt in 0..max_retries {
+            if attempt > 0 {
+                // Exponential backoff: 100ms, 200ms, 400ms, 800ms
+                std::thread::sleep(std::time::Duration::from_millis(100 << attempt));
+            }
+
+            let output = Command::new("grit")
+                .args(&cmd_args)
+                .current_dir(&self.repo_root)
+                .output()
+                .map_err(|e| GritError::CommandFailed(format!("failed to run grit: {}", e)))?;
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                // Check if stderr contains retryable lock indication
+                let is_retryable = stderr.contains("db_busy")
+                    || stderr.contains("db_error")
+                    || stderr.contains("Database locked")
+                    || stderr.contains("could not acquire lock")
+                    || stderr.contains("WouldBlock")
+                    || stderr.contains("temporarily unavailable");
+                if is_retryable && attempt < max_retries - 1 {
+                    last_error = Some(GritError::CommandFailed(stderr.to_string()));
+                    continue;
+                }
+                return Err(GritError::CommandFailed(stderr.to_string()));
+            }
+
+            // Parse directly as the expected type
+            match serde_json::from_str(&stdout) {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    // Check if stdout contains error indicators for retry
+                    let is_retryable = stdout.contains("db_busy")
+                        || stdout.contains("db_error")
+                        || stdout.contains("could not acquire lock");
+                    if is_retryable && attempt < max_retries - 1 {
+                        last_error = Some(GritError::ParseError(format!(
+                            "retryable parse error: {}",
+                            stdout
+                        )));
+                        continue;
+                    }
+                    return Err(GritError::ParseError(format!(
+                        "failed to parse grit output: {} - raw: {}",
+                        e, stdout
+                    )));
+                }
+            }
         }
 
-        envelope
-            .data
-            .ok_or_else(|| GritError::UnexpectedResponse("missing data in response".into()))
+        Err(last_error.unwrap_or_else(|| GritError::CommandFailed("max retries exceeded".into())))
     }
 }
 
@@ -725,6 +927,44 @@ fn parse_task_from_summary(issue: &GritIssueSummary) -> Result<Task, GritError> 
         convoy_id,
         title: issue.title.clone(),
         body: String::new(), // Summary doesn't include body
+        status,
+    })
+}
+
+/// Parse a task from a summary and full issue (includes body).
+fn parse_task_from_full_issue(
+    summary: &GritIssueSummary,
+    full: &GritIssue,
+) -> Result<Task, GritError> {
+    // Extract task ID from labels
+    let task_id = summary
+        .labels
+        .iter()
+        .find_map(|label| label.strip_prefix("task:"))
+        .ok_or_else(|| GritError::ParseError("missing task: label".into()))?
+        .to_string();
+
+    // Extract convoy ID from labels
+    let convoy_id = summary
+        .labels
+        .iter()
+        .find_map(|label| label.strip_prefix("convoy:"))
+        .ok_or_else(|| GritError::ParseError("missing convoy: label".into()))?
+        .to_string();
+
+    // Extract status from labels
+    let status = summary
+        .labels
+        .iter()
+        .find_map(|label| TaskStatus::from_label(label))
+        .unwrap_or_default();
+
+    Ok(Task {
+        task_id,
+        grit_issue_id: summary.issue_id.clone(),
+        convoy_id,
+        title: full.title.clone(),
+        body: full.body.clone(),
         status,
     })
 }

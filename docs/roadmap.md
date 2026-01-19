@@ -67,7 +67,7 @@ These milestones are implemented in the Grit repository.
 - [x] Control room UX for health, sessions, queue, and locks
 - [x] End-to-end integration tests (convoy-like flow)
 
-### Milestone 6: Hardening
+### Milestone 6: Hardening (Current Focus)
 
 - [x] Stress tests (concurrent writers) - in Grit repo
 - [ ] Corruption recovery

@@ -6,6 +6,7 @@ members = [
     "crates/libbrat-grit",
     "crates/libbrat-worktree",
     "crates/libbrat-session",
+    "crates/libbrat-workflow",
     "crates/brat",
 ]
 
@@ -30,6 +31,13 @@ clap = { version = "4.4", features = ["derive"] }
 toml = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
+nix = { version = "0.29", features = ["signal"] }
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+base64 = "0.22"
+serde_yaml = "0.9"
 
 # Internal crates
 libbrat-engine = { path = "crates/libbrat-engine" }
@@ -37,3 +45,4 @@ libbrat-config = { path = "crates/libbrat-config" }
 libbrat-grit = { path = "crates/libbrat-grit" }
 libbrat-worktree = { path = "crates/libbrat-worktree" }
 libbrat-session = { path = "crates/libbrat-session" }
+libbrat-workflow = { path = "crates/libbrat-workflow" }

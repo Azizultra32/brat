@@ -1,0 +1,12 @@
+[package]
+name = "libbrat-workflow"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+libbrat-grit.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_yaml = "0.9"
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true

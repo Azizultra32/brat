@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brat-cli"
+version = "0.1.0"
+description = "Multi-agent coding orchestrator CLI"
+readme = "README.md"
+license = {text = "MIT OR Apache-2.0"}
+requires-python = ">=3.8"
+keywords = ["ai", "coding", "agents", "cli", "automation", "claude", "codex", "aider"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Code Generators",
+]
+
+[project.scripts]
+brat = "brat_cli:main"
+
+[project.urls]
+Homepage = "https://github.com/neul-labs/brat"
+Repository = "https://github.com/neul-labs/brat.git"
+Documentation = "https://github.com/neul-labs/brat#readme"
+Issues = "https://github.com/neul-labs/brat/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]

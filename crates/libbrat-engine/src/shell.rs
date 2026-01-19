@@ -139,21 +139,7 @@ impl Engine for ShellEngine {
                 }
             }
             EngineInput::Signal(sig) => {
-                // Send signal using libc
-                #[cfg(unix)]
-                {
-                    let pid = sess.pid as i32;
-                    unsafe {
-                        libc::kill(pid, sig);
-                    }
-                }
-                #[cfg(not(unix))]
-                {
-                    let _ = sig; // Suppress unused warning
-                    return Err(EngineError::SendFailed(
-                        "signals not supported on this platform".to_string(),
-                    ));
-                }
+                crate::platform::send_raw_signal(sess.pid, sig);
             }
         }
 
@@ -198,13 +184,7 @@ impl Engine for ShellEngine {
         match how {
             StopMode::Graceful => {
                 // Send SIGTERM first
-                #[cfg(unix)]
-                {
-                    let pid = sess.pid as i32;
-                    unsafe {
-                        libc::kill(pid, libc::SIGTERM);
-                    }
-                }
+                let _ = crate::platform::send_term_signal(sess.pid);
 
                 // Wait for process to exit with timeout
                 let wait_result = timeout(

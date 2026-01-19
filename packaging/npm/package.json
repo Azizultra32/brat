@@ -1,0 +1,46 @@
+{
+  "name": "brat-cli",
+  "version": "0.1.0",
+  "description": "Multi-agent coding orchestrator CLI",
+  "keywords": [
+    "ai",
+    "coding",
+    "agents",
+    "cli",
+    "automation",
+    "claude",
+    "codex",
+    "aider"
+  ],
+  "license": "(MIT OR Apache-2.0)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neul-labs/brat.git"
+  },
+  "homepage": "https://github.com/neul-labs/brat",
+  "bugs": {
+    "url": "https://github.com/neul-labs/brat/issues"
+  },
+  "bin": {
+    "brat": "bin/brat"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=14"
+  }
+}

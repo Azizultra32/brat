@@ -90,8 +90,10 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         worktree_manager: Option<WorktreeManager>,
     ) -> Self {
         let grit = Arc::new(grit);
+        let engine_name = config.engine_command.clone();
         let monitor = SessionMonitor::new(
             engine,
+            engine_name,
             (*grit).clone(),
             worktree_manager,
             config.monitor_config.clone(),
@@ -191,8 +193,16 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
     /// Spawn a new polecat session for a task.
     async fn spawn_session_for_task(&mut self, task: &Task) -> Result<String, WorkflowError> {
+        // For AI engines, fetch full task to get body (task_list doesn't include body)
+        let is_ai_engine = matches!(self.config.engine_command.as_str(), "codex" | "claude");
+        let full_task = if is_ai_engine && task.body.is_empty() {
+            self.grit.task_get(&task.task_id)?
+        } else {
+            task.clone()
+        };
+
         // Parse paths from task body for lock acquisition
-        let paths = task.parse_paths();
+        let paths = full_task.parse_paths();
         let lock_resources: Vec<String> = paths
             .iter()
             .map(|p| format!("path:{}", p))
@@ -202,8 +212,19 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         let ttl_ms = (self.config.session_timeout_minutes as i64 + 5) * 60 * 1000;
         let acquired_locks = self.lock_helper.acquire_locks(&lock_resources, ttl_ms)?;
 
-        // Build spawn spec
-        let spec = SpawnSpec::new(&self.config.engine_command)
+        // Build spawn spec - for AI engines (codex, claude), use task body as prompt
+        let command = if is_ai_engine {
+            // Construct prompt from task title and body
+            format!(
+                "Task: {}\n\n{}",
+                full_task.title,
+                &full_task.body
+            )
+        } else {
+            self.config.engine_command.clone()
+        };
+
+        let spec = SpawnSpec::new(command)
             .args(self.config.engine_args.clone())
             .arg("--task")
             .arg(&task.task_id);

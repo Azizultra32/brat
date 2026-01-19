@@ -124,6 +124,7 @@ impl BratContext {
     pub fn session_monitor<E: Engine + 'static>(
         &self,
         engine: E,
+        engine_name: impl Into<String>,
         monitor_config: MonitorConfig,
     ) -> Result<SessionMonitor<E>, BratError> {
         let _brat_config = self.require_initialized()?;
@@ -132,6 +133,7 @@ impl BratContext {
 
         Ok(SessionMonitor::new(
             engine,
+            engine_name,
             grit,
             worktree_manager,
             monitor_config,

@@ -2,7 +2,10 @@
 
 use std::time::Duration;
 
-use libbrat_engine::ShellEngine;
+use libbrat_engine::{
+    AiderEngine, ClaudeCodeEngine, CodexEngine, ContinueEngine, CopilotEngine, Engine,
+    GeminiEngine, OpenCodeEngine, ShellEngine,
+};
 use serde::Serialize;
 
 use crate::cli::{Cli, WitnessCommand, WitnessRunArgs};
@@ -74,16 +77,107 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
     // Build workflow config
     let witness_config = WitnessConfig::from_brat_config(config);
 
-    // Create engine (MVP: always use ShellEngine)
-    let engine = ShellEngine::new();
-
     // Create GritClient and WorktreeManager
     let grit = ctx.grit_client();
     let worktree_manager = ctx.worktree_manager().ok();
 
-    // Create workflow
-    let mut workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+    // Determine engine: CLI flag takes precedence over config
+    let engine_name = args
+        .engine
+        .as_ref()
+        .unwrap_or(&config.swarm.engine)
+        .to_lowercase();
 
+    // Create engine and run workflow
+    match engine_name.as_str() {
+        "codex" => {
+            if !cli.quiet && !cli.json {
+                print_human(cli, "Using Codex engine");
+            }
+            let engine = CodexEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+        "claude" | "claude-code" => {
+            if !cli.quiet && !cli.json {
+                print_human(cli, "Using Claude Code engine");
+            }
+            let engine = ClaudeCodeEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+        "opencode" => {
+            if !cli.quiet && !cli.json {
+                print_human(cli, "Using OpenCode engine (open source Claude Code alternative)");
+            }
+            let engine = OpenCodeEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+        "aider" => {
+            if !cli.quiet && !cli.json {
+                print_human(cli, "Using Aider engine");
+            }
+            let engine = AiderEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+        "gemini" => {
+            if !cli.quiet && !cli.json {
+                print_human(cli, "Using Gemini engine (Google's Gemini CLI)");
+            }
+            let engine = GeminiEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+        "copilot" => {
+            if !cli.quiet && !cli.json {
+                print_human(cli, "Using GitHub Copilot CLI engine");
+            }
+            let engine = CopilotEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+        "continue" => {
+            if !cli.quiet && !cli.json {
+                print_human(cli, "Using Continue.dev engine");
+            }
+            let engine = ContinueEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+        "shell" => {
+            if !cli.quiet && !cli.json {
+                print_human(cli, "Using Shell engine");
+            }
+            let engine = ShellEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+        _ => {
+            if !cli.quiet && !cli.json {
+                print_human(
+                    cli,
+                    &format!(
+                        "Unknown engine '{}', falling back to Claude Code. \
+                        Available: claude-code, codex, opencode, aider, gemini, copilot, continue, shell",
+                        engine_name
+                    ),
+                );
+            }
+            let engine = ClaudeCodeEngine::new();
+            let workflow = WitnessWorkflow::new(witness_config, grit, engine, worktree_manager);
+            run_witness_loop(cli, args, workflow).await
+        }
+    }
+}
+
+/// Run the witness workflow loop (shared implementation for any engine).
+async fn run_witness_loop<E: Engine + 'static>(
+    cli: &Cli,
+    args: &WitnessRunArgs,
+    mut workflow: WitnessWorkflow<E>,
+) -> Result<(), BratError> {
     if args.once {
         // Single iteration mode
         let result = workflow.run_once().await?;

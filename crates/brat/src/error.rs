@@ -55,6 +55,10 @@ pub enum BratError {
     /// Workflow error.
     #[error("workflow error: {0}")]
     Workflow(#[from] WorkflowError),
+
+    /// Other error.
+    #[error("{0}")]
+    Other(String),
 }
 
 impl BratError {
@@ -73,6 +77,7 @@ impl BratError {
             BratError::Json(_) => "json_error",
             BratError::RoleDisabled(_) => "role_disabled",
             BratError::Workflow(_) => "workflow_error",
+            BratError::Other(_) => "other_error",
         }
     }
 
@@ -91,6 +96,7 @@ impl BratError {
             BratError::Json(_) => 11,
             BratError::RoleDisabled(_) => 12,
             BratError::Workflow(_) => 13,
+            BratError::Other(_) => 1,
         }
     }
 }

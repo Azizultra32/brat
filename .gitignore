@@ -4,3 +4,5 @@ memista.*
 .vscode
 *.env
 ~/
+.brat
+.grit

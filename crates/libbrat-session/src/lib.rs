@@ -16,7 +16,7 @@
 //!
 //! let engine = ShellEngine::new();
 //! let grit = GritClient::new("/path/to/repo");
-//! let monitor = SessionMonitor::new(engine, grit, None, MonitorConfig::default());
+//! let monitor = SessionMonitor::new(engine, "shell", grit, None, MonitorConfig::default());
 //!
 //! // Spawn a session
 //! let handle = monitor.spawn_session(
