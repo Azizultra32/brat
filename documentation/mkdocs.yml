@@ -1,0 +1,142 @@
+site_name: Brat Documentation
+site_description: Multi-agent orchestration harness for AI coding agents
+site_url: https://neul-labs.github.io/brat/
+repo_url: https://github.com/neul-labs/brat
+repo_name: neul-labs/brat
+edit_uri: edit/main/documentation/docs/
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/favicon.ico
+
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  features:
+    # Navigation
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+
+    # Table of contents
+    - toc.follow
+
+    # Search
+    - search.suggest
+    - search.highlight
+    - search.share
+
+    # Content
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+
+  icon:
+    repo: fontawesome/brands/github
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/neul-labs/brat
+  generator: false
+
+plugins:
+  - search:
+      lang: en
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+  # Python Markdown Extensions
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - getting-started/index.md
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - Your First Convoy: getting-started/first-convoy.md
+  - Concepts:
+      - concepts/index.md
+      - How Brat Works: concepts/architecture.md
+      - Convoys and Tasks: concepts/convoys-and-tasks.md
+      - Roles: concepts/roles.md
+      - AI Engines: concepts/engines.md
+  - User Guides:
+      - guides/index.md
+      - Using the Mayor: guides/using-the-mayor.md
+      - Managing Convoys: guides/managing-convoys.md
+      - Managing Tasks: guides/managing-tasks.md
+      - Web Dashboard: guides/web-dashboard.md
+      - Workflow Templates: guides/workflows.md
+      - Troubleshooting: guides/troubleshooting.md
+  - Configuration:
+      - configuration/index.md
+      - Config File Reference: configuration/config-file.md
+      - Daemon Configuration: configuration/daemon.md
+  - Reference:
+      - reference/index.md
+      - CLI Reference: reference/cli.md
