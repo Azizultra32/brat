@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 // =============================================================================
-// Dependency Types (for grite issue dep commands)
+// Dependency Types (for gritee issue dep commands)
 // =============================================================================
 
 /// Type of dependency relationship between issues/tasks.
@@ -46,7 +46,7 @@ impl std::fmt::Display for DependencyType {
 /// A dependency relationship between tasks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskDependency {
-    /// The target task's grite issue ID.
+    /// The target task's gritee issue ID.
     pub issue_id: String,
     /// The type of dependency.
     pub dep_type: DependencyType,
@@ -55,7 +55,7 @@ pub struct TaskDependency {
 }
 
 // =============================================================================
-// Context Types (for grite context commands)
+// Context Types (for gritee context commands)
 // =============================================================================
 
 /// Result of context indexing operation.
@@ -116,12 +116,12 @@ pub struct ProjectContextEntry {
 }
 
 // =============================================================================
-// Grit Issue Types
+// Grite Issue Types
 // =============================================================================
 
-/// A Grit issue as returned by `grite issue show --json`.
+/// A Grite issue as returned by `gritee issue show --json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GriteIssue {
+pub struct GriteeIssue {
     pub issue_id: String,
     pub title: String,
     #[serde(default)]
@@ -134,9 +134,9 @@ pub struct GriteIssue {
     pub updated_ts: i64,
 }
 
-/// Summary of a Grit issue from list command.
+/// Summary of a Grite issue from list command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GriteIssueSummary {
+pub struct GriteeIssueSummary {
     pub issue_id: String,
     pub title: String,
     #[serde(default)]
@@ -434,8 +434,8 @@ pub struct Session {
     /// Associated task ID.
     pub task_id: String,
 
-    /// Grit issue ID of the parent task.
-    pub grite_issue_id: String,
+    /// Grite issue ID of the parent task.
+    pub gritee_issue_id: String,
 
     /// Role executing the session.
     pub role: SessionRole,
@@ -472,14 +472,14 @@ pub struct Session {
     pub last_output_ref: Option<String>,
 }
 
-/// A parsed convoy from a Grit issue.
+/// A parsed convoy from a Grite issue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Convoy {
     /// Brat convoy ID (e.g., "c-20250116-a2f9").
     pub convoy_id: String,
 
-    /// Grit's internal issue ID.
-    pub grite_issue_id: String,
+    /// Grite's internal issue ID.
+    pub gritee_issue_id: String,
 
     /// Convoy title.
     pub title: String,
@@ -492,14 +492,14 @@ pub struct Convoy {
     pub status: ConvoyStatus,
 }
 
-/// A parsed task from a Grit issue.
+/// A parsed task from a Grite issue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     /// Brat task ID (e.g., "t-20250116-3a2c").
     pub task_id: String,
 
-    /// Grit's internal issue ID.
-    pub grite_issue_id: String,
+    /// Grite's internal issue ID.
+    pub gritee_issue_id: String,
 
     /// Parent convoy ID.
     pub convoy_id: String,
@@ -629,7 +629,7 @@ mod tests {
     fn test_task_parse_paths() {
         let task = Task {
             task_id: "t-20250117-test".to_string(),
-            grite_issue_id: "issue-123".to_string(),
+            gritee_issue_id: "issue-123".to_string(),
             convoy_id: "c-20250117-test".to_string(),
             title: "Test task".to_string(),
             body: "Some description\n\nPaths: src/main.rs, src/lib.rs, tests/\n\nMore text".to_string(),
@@ -644,7 +644,7 @@ mod tests {
     fn test_task_parse_paths_empty() {
         let task = Task {
             task_id: "t-20250117-test".to_string(),
-            grite_issue_id: "issue-123".to_string(),
+            gritee_issue_id: "issue-123".to_string(),
             convoy_id: "c-20250117-test".to_string(),
             title: "Test task".to_string(),
             body: "Some description without paths".to_string(),
@@ -659,7 +659,7 @@ mod tests {
     fn test_task_parse_paths_single() {
         let task = Task {
             task_id: "t-20250117-test".to_string(),
-            grite_issue_id: "issue-123".to_string(),
+            gritee_issue_id: "issue-123".to_string(),
             convoy_id: "c-20250117-test".to_string(),
             title: "Test task".to_string(),
             body: "Paths: src/single.rs".to_string(),

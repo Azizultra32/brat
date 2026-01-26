@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::cli::Cli;
 use crate::error::BratError;
 
-/// JSON response envelope (following Grit's pattern).
+/// JSON response envelope (following Grite's pattern).
 #[derive(Debug, Serialize)]
 pub struct JsonResponse<T: Serialize> {
     pub schema_version: u32,

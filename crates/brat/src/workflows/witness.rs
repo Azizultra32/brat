@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use libbrat_config::BratConfig;
 use libbrat_engine::{Engine, SpawnSpec};
-use libbrat_grite::{GriteClient, SessionRole, SessionStatus, SessionType, Task, TaskStatus};
+use libbrat_gritee::{GriteeClient, SessionRole, SessionStatus, SessionType, Task, TaskStatus};
 use libbrat_session::{MonitorConfig, MonitorHandle, SessionMonitor};
 use libbrat_worktree::WorktreeManager;
 use serde::Serialize;
@@ -70,8 +70,8 @@ pub struct WitnessLoopResult {
 pub struct WitnessWorkflow<E: Engine + 'static> {
     /// Configuration.
     config: WitnessConfig,
-    /// Grite client for task/session queries.
-    grite: Arc<GriteClient>,
+    /// Gritee client for task/session queries.
+    gritee: Arc<GriteeClient>,
     /// Session monitor for spawning and tracking sessions.
     monitor: SessionMonitor<E>,
     /// Track active sessions by task_id -> session_id.
@@ -88,25 +88,25 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
     /// Create a new WitnessWorkflow.
     pub fn new(
         config: WitnessConfig,
-        grite: GriteClient,
+        gritee: GriteeClient,
         engine: E,
         worktree_manager: Option<WorktreeManager>,
     ) -> Self {
-        let grite = Arc::new(grite);
+        let gritee = Arc::new(gritee);
         let engine_name = config.engine_command.clone();
         let monitor = SessionMonitor::new(
             engine,
             engine_name,
-            (*grite).clone(),
+            (*gritee).clone(),
             worktree_manager,
             config.monitor_config.clone(),
         );
-        let lock_helper = LockHelper::from_config(Arc::clone(&grite), &config.lock_policy);
+        let lock_helper = LockHelper::from_config(Arc::clone(&gritee), &config.lock_policy);
         let event_emitter = EventEmitter::new();
 
         Self {
             config,
-            grite,
+            gritee,
             monitor,
             active_sessions: HashMap::new(),
             lock_helper,
@@ -122,7 +122,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         // Step 0: Clean up locks for exited sessions
         self.cleanup_exited_session_locks().await;
 
-        // Step 1: Query Grit for actionable tasks
+        // Step 1: Query Grite for actionable tasks
         let tasks = self.query_actionable_tasks()?;
         result.tasks_found = tasks.len();
 
@@ -173,16 +173,16 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         let mut ready_tasks = Vec::new();
 
         // Try to get tasks in topological order first
-        let topo_issues = self.grite.task_topo_order(None).unwrap_or_default();
+        let topo_issues = self.gritee.task_topo_order(None).unwrap_or_default();
 
         // Build a set of completed task issue IDs for quick lookup
         let completed_issue_ids: std::collections::HashSet<String> = self
-            .grite
+            .gritee
             .task_list(None)
             .unwrap_or_default()
             .iter()
             .filter(|t| t.status == TaskStatus::Merged || t.status == TaskStatus::Dropped)
-            .map(|t| t.grite_issue_id.clone())
+            .map(|t| t.gritee_issue_id.clone())
             .collect();
 
         // Filter topologically sorted tasks to queued/running ones
@@ -203,7 +203,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
             // Check if all dependencies are complete
             let deps = self
-                .grite
+                .gritee
                 .task_dep_list(&issue.issue_id, false)
                 .unwrap_or_default();
 
@@ -218,7 +218,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
             // Get full task details
             if let Some(task_id) = issue.labels.iter().find_map(|l| l.strip_prefix("task:")) {
-                if let Ok(task) = self.grite.task_get(task_id) {
+                if let Ok(task) = self.gritee.task_get(task_id) {
                     if task.status == TaskStatus::Queued || task.status == TaskStatus::Running {
                         ready_tasks.push(task);
                     }
@@ -228,7 +228,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
         // If topological order failed or returned empty, fall back to regular list
         if ready_tasks.is_empty() {
-            if let Ok(queued) = self.grite.task_list(None) {
+            if let Ok(queued) = self.gritee.task_list(None) {
                 for task in queued {
                     if task.status == TaskStatus::Queued || task.status == TaskStatus::Running {
                         ready_tasks.push(task);
@@ -247,8 +247,8 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
             return true;
         }
 
-        // Query Grit for active sessions on this task
-        if let Ok(sessions) = self.grite.session_list(Some(task_id)) {
+        // Query Grite for active sessions on this task
+        if let Ok(sessions) = self.gritee.session_list(Some(task_id)) {
             return sessions.iter().any(|s| s.status != SessionStatus::Exit);
         }
 
@@ -260,7 +260,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         // For AI engines, fetch full task to get body (task_list doesn't include body)
         let is_ai_engine = matches!(self.config.engine_command.as_str(), "codex" | "claude");
         let full_task = if is_ai_engine && task.body.is_empty() {
-            self.grite.task_get(&task.task_id)?
+            self.gritee.task_get(&task.task_id)?
         } else {
             task.clone()
         };
@@ -293,7 +293,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
             .arg("--task")
             .arg(&task.task_id);
 
-        // Spawn via SessionMonitor (handles worktree, Grit record, etc.)
+        // Spawn via SessionMonitor (handles worktree, Grite record, etc.)
         let handle = match self
             .monitor
             .spawn_session(
@@ -329,7 +329,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
             "Witness spawned polecat session `{}` for this task.{}",
             session_id, lock_info
         );
-        self.grite.issue_comment(&task.grite_issue_id, &comment)?;
+        self.gritee.issue_comment(&task.gritee_issue_id, &comment)?;
 
         // Emit session started event
         self.event_emitter.session_started(
@@ -340,7 +340,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
         // Update task status to Running if it was Queued
         if task.status == TaskStatus::Queued {
-            self.grite
+            self.gritee
                 .task_update_status(&task.task_id, TaskStatus::Running)?;
 
             // Emit task updated event
@@ -361,7 +361,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
         for session_id in tracked_sessions {
             // Check if session still exists and is active
-            let session_info = self.grite.session_get(&session_id);
+            let session_info = self.gritee.session_get(&session_id);
             let is_active = match &session_info {
                 Ok(session) => session.status != SessionStatus::Exit,
                 Err(_) => false, // Session not found, treat as exited

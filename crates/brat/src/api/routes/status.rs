@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
-use libbrat_grite::{SessionStatus, TaskStatus};
+use libbrat_gritee::{SessionStatus, TaskStatus};
 use serde::Serialize;
 
 use crate::api::state::DaemonState;
@@ -56,7 +56,7 @@ async fn get_status(
     })?;
 
     // Get convoy list
-    let convoys = ctx.grite.convoy_list().map_err(|e| {
+    let convoys = ctx.gritee.convoy_list().map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -66,7 +66,7 @@ async fn get_status(
     })?;
 
     // Get task list
-    let tasks = ctx.grite.task_list(None).map_err(|e| {
+    let tasks = ctx.gritee.task_list(None).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -89,7 +89,7 @@ async fn get_status(
     }
 
     // Get session list
-    let sessions = ctx.grite.session_list(None).map_err(|e| {
+    let sessions = ctx.gritee.session_list(None).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {

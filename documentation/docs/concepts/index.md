@@ -83,14 +83,14 @@ graph TD
 | **Session** | A running instance of an AI agent working on a task |
 | **Engine** | An AI coding tool (Claude Code, Aider, etc.) |
 | **Worktree** | An isolated git workspace where an agent makes changes |
-| **Grit** | The append-only event log substrate |
+| **Grite** | The append-only event log substrate |
 | **WAL** | Write-ahead log storing all coordination events |
 
 ## Design Principles
 
 ### Crash-Safe by Default
 
-All coordination state lives in the Grit WAL (Write-Ahead Log). If anything crashes:
+All coordination state lives in the Grite WAL (Write-Ahead Log). If anything crashes:
 
 - State can be deterministically rebuilt from the log
 - No dirty working trees or corrupted state
@@ -100,7 +100,7 @@ All coordination state lives in the Grit WAL (Write-Ahead Log). If anything cras
 
 Brat never writes coordination metadata to tracked files:
 
-- Convoys and tasks are Grit issues, not files
+- Convoys and tasks are Grite issues, not files
 - Status lives in labels, not comments in code
 - Your working tree stays clean
 

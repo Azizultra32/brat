@@ -116,7 +116,7 @@ brat witness run --once
 
 ## Task Structure
 
-Under the hood, tasks are stored as Grit issues with labels:
+Under the hood, tasks are stored as Grite issues with labels:
 
 ```
 Labels:

@@ -1,6 +1,6 @@
 # Usability upgrades (mixed teams)
 
-This document defines the usability posture for Brat in mixed teams. Brat is the single CLI; Grit remains the substrate and stays hidden in day-to-day use.
+This document defines the usability posture for Brat in mixed teams. Brat is the single CLI; Grite remains the substrate and stays hidden in day-to-day use.
 
 ## Principles
 
@@ -44,7 +44,7 @@ Brat should surface these explicitly in `brat status` and the control room.
   - Action: `brat lock status`, coordinate, or `--force`
 - **Config error**: invalid or missing config
   - Action: `brat config validate`, fix `.brat/config.toml`
-- **Daemon down**: `gritd` or `bratd` unavailable
+- **Daemon down**: `grited` or `bratd` unavailable
   - Action: restart; CLI should still function
 - **Projection drift**: inconsistent local view
   - Action: `brat doctor --rebuild`
@@ -123,7 +123,7 @@ Interventions needed:
     - `brat config validate`
     - `brat witness run --once`
 - `daemon_down`
-  - Prompt: Decide whether to restart `bratd`/`gritd` or proceed with CLI-only operations.
+  - Prompt: Decide whether to restart `bratd`/`grited` or proceed with CLI-only operations.
   - Commands:
     - `brat status --json`
     - `brat witness run --once`

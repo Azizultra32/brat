@@ -74,8 +74,8 @@ fn run_check(cli: &Cli) -> Result<(), BratError> {
     // Check 1: Git repository
     checks.push(check_git_repo(&ctx));
 
-    // Check 2: Grit initialized
-    checks.push(check_grite_initialized(&ctx));
+    // Check 2: Grite initialized
+    checks.push(check_gritee_initialized(&ctx));
 
     // Check 3: Brat initialized
     checks.push(check_brat_initialized(&ctx));
@@ -88,8 +88,8 @@ fn run_check(cli: &Cli) -> Result<(), BratError> {
         checks.push(check_worktree_root(&ctx));
     }
 
-    // Check 6: No stale sessions (only if grite is initialized)
-    if ctx.is_grite_initialized() {
+    // Check 6: No stale sessions (only if gritee is initialized)
+    if ctx.is_gritee_initialized() {
         checks.push(check_stale_sessions(&ctx));
     }
 
@@ -187,9 +187,9 @@ impl From<ReconcileResult> for RebuildOutput {
 fn run_rebuild(cli: &Cli) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let grite = ctx.grite_client();
+    let gritee = ctx.gritee_client();
     let worktree_manager = ctx.worktree_manager().ok();
     let config = ctx
         .config
@@ -197,7 +197,7 @@ fn run_rebuild(cli: &Cli) -> Result<(), BratError> {
         .map(|c| c.interventions.clone())
         .unwrap_or_default();
 
-    let workflow = ReconcileWorkflow::new(grite, worktree_manager, config);
+    let workflow = ReconcileWorkflow::new(gritee, worktree_manager, config);
     let result = workflow.run_once()?;
 
     if !cli.json && !cli.quiet {
@@ -263,20 +263,20 @@ fn check_git_repo(ctx: &BratContext) -> HealthCheck {
     }
 }
 
-/// Check if Grit is initialized.
-fn check_grite_initialized(ctx: &BratContext) -> HealthCheck {
-    if ctx.is_grite_initialized() {
+/// Check if Grite is initialized.
+fn check_gritee_initialized(ctx: &BratContext) -> HealthCheck {
+    if ctx.is_gritee_initialized() {
         HealthCheck {
-            name: "grite_initialized".to_string(),
+            name: "gritee_initialized".to_string(),
             status: CheckStatus::Pass,
-            message: "Grit ledger found".to_string(),
+            message: "Grite ledger found".to_string(),
             remediation: None,
         }
     } else {
         HealthCheck {
-            name: "grite_initialized".to_string(),
+            name: "gritee_initialized".to_string(),
             status: CheckStatus::Fail,
-            message: "Grit not initialized".to_string(),
+            message: "Grite not initialized".to_string(),
             remediation: Some("Run `brat init` to initialize".to_string()),
         }
     }
@@ -361,7 +361,7 @@ fn check_worktree_root(ctx: &BratContext) -> HealthCheck {
 
 /// Check for stale sessions.
 fn check_stale_sessions(ctx: &BratContext) -> HealthCheck {
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
 
     // Get intervention threshold
     let stale_threshold_ms = ctx

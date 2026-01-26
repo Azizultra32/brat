@@ -192,12 +192,12 @@ Base URL: `http://127.0.0.1:3000/api/v1`
 - Repositories are identified by base64-encoded paths
 - Register repos via API: `POST /repos` with `{"path": "/path/to/repo"}`
 
-## Interaction with Grit
+## Interaction with Grite
 
-- Daemon uses Grit as the source of truth
-- All convoy/task/session state stored in Grit issues and comments
-- If `gritd` is running, bratd benefits from its warm cache
-- Daemon works without `gritd` by using Grit CLI directly
+- Daemon uses Grite as the source of truth
+- All convoy/task/session state stored in Grite issues and comments
+- If `grited` is running, bratd benefits from its warm cache
+- Daemon works without `grited` by using Grite CLI directly
 
 ## Failure Behavior
 

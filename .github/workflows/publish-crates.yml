@@ -20,7 +20,7 @@ jobs:
         run: |
           # Publish in dependency order (libs first, then main binary)
           # Wait between publishes for crates.io to index
-          for crate in libbrat-config libbrat-worktree libbrat-grit libbrat-engine libbrat-session libbrat-workflow brat; do
+          for crate in libbrat-config libbrat-worktree libbrat-grite libbrat-engine libbrat-session libbrat-workflow brat; do
             echo "Publishing $crate..."
             cargo publish -p $crate --no-verify || echo "Warning: $crate publish failed (may already exist)"
             echo "Waiting for crates.io to index..."

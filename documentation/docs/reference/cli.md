@@ -34,7 +34,7 @@ brat init [OPTIONS]
 
 Behavior:
 
-- Initializes Grit ledger (`grit init`)
+- Initializes Grite ledger (`grite init`)
 - Creates `.brat/config.toml` (unless `--no-config`)
 - Starts daemon (unless `--no-daemon`)
 

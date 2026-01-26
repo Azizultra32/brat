@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use libbrat_config::BratConfig;
 use libbrat_engine::Engine;
-use libbrat_grite::GriteClient;
+use libbrat_gritee::GriteeClient;
 use libbrat_session::{MonitorConfig, SessionMonitor};
 use libbrat_worktree::WorktreeManager;
 
@@ -77,23 +77,23 @@ impl BratContext {
         self.config.as_ref().ok_or(BratError::NotInitialized)
     }
 
-    /// Check if Grit is initialized in this repository.
-    pub fn is_grite_initialized(&self) -> bool {
-        self.git_dir.join("grite").exists()
+    /// Check if Grite is initialized in this repository.
+    pub fn is_gritee_initialized(&self) -> bool {
+        self.git_dir.join("gritee").exists()
     }
 
-    /// Require that Grit is initialized.
-    pub fn require_grite_initialized(&self) -> Result<(), BratError> {
-        if self.is_grite_initialized() {
+    /// Require that Grite is initialized.
+    pub fn require_gritee_initialized(&self) -> Result<(), BratError> {
+        if self.is_gritee_initialized() {
             Ok(())
         } else {
-            Err(BratError::GriteNotInitialized)
+            Err(BratError::GriteeNotInitialized)
         }
     }
 
-    /// Create a GriteClient for this repository.
-    pub fn grite_client(&self) -> GriteClient {
-        GriteClient::new(&self.repo_root)
+    /// Create a GriteeClient for this repository.
+    pub fn gritee_client(&self) -> GriteeClient {
+        GriteeClient::new(&self.repo_root)
     }
 
     /// Create a WorktreeManager for this repository.
@@ -110,7 +110,7 @@ impl BratContext {
 
     /// Create a SessionMonitor for this repository.
     ///
-    /// The SessionMonitor coordinates engine processes with Grite sessions
+    /// The SessionMonitor coordinates engine processes with Gritee sessions
     /// and optional worktree isolation.
     ///
     /// # Arguments
@@ -128,13 +128,13 @@ impl BratContext {
         monitor_config: MonitorConfig,
     ) -> Result<SessionMonitor<E>, BratError> {
         let _brat_config = self.require_initialized()?;
-        let grite = self.grite_client();
+        let gritee = self.gritee_client();
         let worktree_manager = self.worktree_manager().ok();
 
         Ok(SessionMonitor::new(
             engine,
             engine_name,
-            grite,
+            gritee,
             worktree_manager,
             monitor_config,
         ))

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use libbrat_config::BratConfig;
-use libbrat_grite::GriteClient;
+use libbrat_gritee::GriteeClient;
 use libbrat_worktree::WorktreeManager;
 use serde::Serialize;
 use tokio::sync::{broadcast, RwLock};
@@ -153,8 +153,8 @@ impl DaemonState {
         let config = BratConfig::load(&config_path)
             .map_err(|e| format!("Failed to load config: {}", e))?;
 
-        // Create Grite client
-        let grite = GriteClient::new(&path);
+        // Create Gritee client
+        let gritee = GriteeClient::new(&path);
 
         // Create worktree manager
         let worktree_manager = WorktreeManager::new(
@@ -167,7 +167,7 @@ impl DaemonState {
         let context = Arc::new(RepoContext {
             id: repo_id.clone(),
             path: path.clone(),
-            grite,
+            gritee,
             config,
             worktree_manager: Some(worktree_manager),
         });
@@ -209,8 +209,8 @@ pub struct RepoContext {
     pub id: String,
     /// Path to repository root.
     pub path: PathBuf,
-    /// Grite client for this repo.
-    pub grite: GriteClient,
+    /// Gritee client for this repo.
+    pub gritee: GriteeClient,
     /// Brat configuration.
     pub config: BratConfig,
     /// Worktree manager (if available).

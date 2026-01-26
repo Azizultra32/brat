@@ -1,6 +1,6 @@
 # Harness Configuration
 
-This doc defines Brat-specific configuration. Grit configuration remains in `.git/grit/config.toml` and actor directories.
+This doc defines Brat-specific configuration. Grite configuration remains in `.git/grite/config.toml` and actor directories.
 
 ## Config Locations
 
@@ -28,7 +28,7 @@ idle_timeout_secs = 900
 
 [swarm]
 max_polecats = 6
-worktree_root = ".grit/worktrees"
+worktree_root = ".grite/worktrees"
 engine = "claude"
 
 [engine]
@@ -89,7 +89,7 @@ Polecat session management.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `max_polecats` | int | `6` | Max concurrent polecat sessions |
-| `worktree_root` | string | `".grit/worktrees"` | Directory for session worktrees |
+| `worktree_root` | string | `".grite/worktrees"` | Directory for session worktrees |
 | `engine` | string | `"claude"` | Default AI engine for polecats |
 
 ### `[engine]`
@@ -121,7 +121,7 @@ Merge queue settings.
 
 ### `[locks]`
 
-Brat-level lock enforcement (independent of Grit's lock policy).
+Brat-level lock enforcement (independent of Grite's lock policy).
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -175,16 +175,16 @@ Environment variables override config file settings:
 
 ---
 
-## Relationship to Grit Config
+## Relationship to Grite Config
 
 | Config | Location | Purpose |
 |--------|----------|---------|
-| Grit | `.git/grit/config.toml` | Actor defaults, substrate lock policy |
+| Grite | `.git/grite/config.toml` | Actor defaults, substrate lock policy |
 | Brat | `.brat/config.toml` | Engine, daemon, witness settings |
 
 Key differences:
 
-- Brat never writes to `.git/grit/` directly
-- All task state flows through Grit issues, comments, labels, and locks
-- Brat-level lock policy is enforced in addition to Grit-level policy
-- Brat config is gitignored; Grit config may be committed
+- Brat never writes to `.git/grite/` directly
+- All task state flows through Grite issues, comments, labels, and locks
+- Brat-level lock policy is enforced in addition to Grite-level policy
+- Brat config is gitignored; Grite config may be committed

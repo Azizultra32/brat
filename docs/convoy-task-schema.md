@@ -1,6 +1,6 @@
-# Convoy and task schema (Grit-backed)
+# Convoy and task schema (Grite-backed)
 
-This doc defines the minimal schema Brat uses to represent convoys and tasks in Grit. The goal is a stable, queryable structure for automation.
+This doc defines the minimal schema Brat uses to represent convoys and tasks in Grite. The goal is a stable, queryable structure for automation.
 
 ## IDs
 
@@ -10,7 +10,7 @@ IDs are used in labels and comments for stable linkage.
 
 ## Convoy issue
 
-Convoys are Grit issues with these required labels:
+Convoys are Grite issues with these required labels:
 
 - `type:convoy`
 - `convoy:<convoy_id>`
@@ -28,7 +28,7 @@ Owner: <actor_id or handle>
 
 ## Task issue
 
-Tasks are Grit issues with these required labels:
+Tasks are Grite issues with these required labels:
 
 - `type:task`
 - `task:<task_id>`

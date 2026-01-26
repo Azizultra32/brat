@@ -2,7 +2,7 @@
 
 **Orchestrate autonomous AI coding agents with crash-safe, deterministic state management.**
 
-Brat is a multi-agent harness that coordinates AI coding tools (Claude Code, Aider, Codex, and more) working in parallel on your codebase. Built on [Grit](https://github.com/neul-labs/grit), an append-only event log, Brat ensures that even if agents crash, your coordination state is always recoverable and auditable.
+Brat is a multi-agent harness that coordinates AI coding tools (Claude Code, Aider, Codex, and more) working in parallel on your codebase. Built on [Grite](https://github.com/neul-labs/grite), an append-only event log, Brat ensures that even if agents crash, your coordination state is always recoverable and auditable.
 
 ---
 
@@ -43,7 +43,7 @@ Brat is a multi-agent harness that coordinates AI coding tools (Claude Code, Aid
 ```bash
 # Initialize Brat in your project
 cd your-project
-grit init      # Initialize Grit substrate
+grite init      # Initialize Grite substrate
 brat init      # Initialize Brat harness
 
 # Start the AI orchestrator
@@ -93,7 +93,7 @@ brat witness run --once
 
     ---
 
-    Install Brat and Grit on your system.
+    Install Brat and Grite on your system.
 
     [:octicons-arrow-right-24: Install now](getting-started/installation.md)
 

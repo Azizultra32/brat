@@ -35,7 +35,7 @@ pub struct Event {
 - `issue_id` is a random 128-bit ID generated for `IssueCreated`.
 - `event_id` is content-addressed and deterministic.
 
-Actor IDs are assigned during `grit init` (or first run if missing) and stored in `.git/grit/actors/<actor_id>/config.toml`. Each agent should have its own `actor` and its own local data directory under `.git/grit/actors/<actor_id>/`.
+Actor IDs are assigned during `grite init` (or first run if missing) and stored in `.git/grite/actors/<actor_id>/config.toml`. Each agent should have its own `actor` and its own local data directory under `.git/grite/actors/<actor_id>/`.
 
 ## Canonical encoding and event hashing
 

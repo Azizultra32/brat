@@ -1,4 +1,4 @@
-//! Brat - Multi-agent coding harness backed by Grit
+//! Brat - Multi-agent coding harness backed by Grite
 //!
 //! This library provides the API server and daemon functionality.
 

@@ -1,6 +1,6 @@
 # Engine abstraction
 
-Engines encapsulate how sessions are spawned and controlled (Claude Code, Codex CLI, OpenCode, shell, etc). The harness uses engine sessions and records progress in Grit.
+Engines encapsulate how sessions are spawned and controlled (Claude Code, Codex CLI, OpenCode, shell, etc). The harness uses engine sessions and records progress in Grite.
 
 ## Trait
 
@@ -25,7 +25,7 @@ trait Engine {
 
 - All engine calls are wrapped in bounded timeouts.
 - Outputs are captured and hashed for reference.
-- Errors are structured and surfaced via Grit comments or labels.
+- Errors are structured and surfaced via Grite comments or labels.
 
 ## Normalization defaults
 

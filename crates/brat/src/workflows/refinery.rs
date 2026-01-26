@@ -8,7 +8,7 @@ use std::process::Command;
 use std::sync::Arc;
 
 use libbrat_config::BratConfig;
-use libbrat_grite::{GriteClient, Task, TaskStatus};
+use libbrat_gritee::{GriteeClient, Task, TaskStatus};
 use serde::Serialize;
 
 use super::error::WorkflowError;
@@ -115,8 +115,8 @@ enum MergeOutcome {
 pub struct RefineryWorkflow {
     /// Configuration.
     config: RefineryConfig,
-    /// Grite client for task/session queries.
-    grite: Arc<GriteClient>,
+    /// Gritee client for task/session queries.
+    gritee: Arc<GriteeClient>,
     /// Repository root path.
     repo_root: PathBuf,
     /// Track merge attempts by task_id.
@@ -133,14 +133,14 @@ pub struct RefineryWorkflow {
 
 impl RefineryWorkflow {
     /// Create a new RefineryWorkflow.
-    pub fn new(config: RefineryConfig, grite: GriteClient, repo_root: PathBuf) -> Self {
-        let grite = Arc::new(grite);
-        let lock_helper = LockHelper::from_config(Arc::clone(&grite), &config.lock_policy);
+    pub fn new(config: RefineryConfig, gritee: GriteeClient, repo_root: PathBuf) -> Self {
+        let gritee = Arc::new(gritee);
+        let lock_helper = LockHelper::from_config(Arc::clone(&gritee), &config.lock_policy);
         let event_emitter = EventEmitter::new();
 
         Self {
             config,
-            grite,
+            gritee,
             repo_root,
             merge_attempts: HashMap::new(),
             merging: Vec::new(),
@@ -231,7 +231,7 @@ impl RefineryWorkflow {
 
     /// Query tasks eligible for merge (NeedsReview status, not in retry cooldown).
     fn query_merge_queue(&self) -> Result<Vec<Task>, WorkflowError> {
-        let tasks = self.grite.task_list(None)?;
+        let tasks = self.gritee.task_list(None)?;
         let now = chrono::Utc::now().timestamp();
 
         Ok(tasks
@@ -258,7 +258,7 @@ impl RefineryWorkflow {
     /// Attempt to merge a task's branch.
     async fn attempt_merge(&mut self, task: &Task) -> Result<MergeOutcome, WorkflowError> {
         // Set merge:running label
-        self.set_merge_label(&task.grite_issue_id, merge_labels::RUNNING)?;
+        self.set_merge_label(&task.gritee_issue_id, merge_labels::RUNNING)?;
 
         // Post merge attempt comment
         let attempt = self.merge_attempts.get(&task.task_id).copied().unwrap_or(1);
@@ -266,7 +266,7 @@ impl RefineryWorkflow {
             "[merge]\nattempt = {}\nstrategy = \"{}\"\nresult = \"running\"\n[/merge]",
             attempt, self.config.rebase_strategy
         );
-        self.grite.issue_comment(&task.grite_issue_id, &comment)?;
+        self.gritee.issue_comment(&task.gritee_issue_id, &comment)?;
 
         // Check required checks
         match self.check_required_checks(task) {
@@ -276,14 +276,14 @@ impl RefineryWorkflow {
             Ok(false) => {
                 // Checks pending - skip this task for now, will retry next cycle
                 // Remove running label since we're not actually merging yet
-                self.set_merge_label(&task.grite_issue_id, merge_labels::QUEUED)?;
+                self.set_merge_label(&task.gritee_issue_id, merge_labels::QUEUED)?;
                 return Ok(MergeOutcome::Deferred);
             }
             Err(e) => {
                 // Check failed - mark as failed
-                self.set_merge_label(&task.grite_issue_id, merge_labels::FAILED)?;
-                self.grite.issue_comment(
-                    &task.grite_issue_id,
+                self.set_merge_label(&task.gritee_issue_id, merge_labels::FAILED)?;
+                self.gritee.issue_comment(
+                    &task.gritee_issue_id,
                     &format!("Merge blocked: {}", e),
                 )?;
                 return Err(e);
@@ -297,9 +297,9 @@ impl RefineryWorkflow {
             Ok(locks) => locks,
             Err(e) => {
                 // Lock acquisition failed - skip this task for now, will retry next cycle
-                self.set_merge_label(&task.grite_issue_id, merge_labels::QUEUED)?;
-                self.grite.issue_comment(
-                    &task.grite_issue_id,
+                self.set_merge_label(&task.gritee_issue_id, merge_labels::QUEUED)?;
+                self.gritee.issue_comment(
+                    &task.gritee_issue_id,
                     &format!("Merge deferred: {}", e),
                 )?;
                 return Err(e);
@@ -323,16 +323,16 @@ impl RefineryWorkflow {
                 match self.run_git(&["push", "origin", "main"]) {
                     Ok(_) => {
                         // Push succeeded - complete success
-                        self.set_merge_label(&task.grite_issue_id, merge_labels::SUCCEEDED)?;
+                        self.set_merge_label(&task.gritee_issue_id, merge_labels::SUCCEEDED)?;
 
                         let comment = format!(
                             "[merge]\nattempt = {}\nstrategy = \"{}\"\nresult = \"succeeded\"\nmerge_commit = \"{}\"\n[/merge]",
                             attempt, self.config.rebase_strategy, commit_sha
                         );
-                        self.grite.issue_comment(&task.grite_issue_id, &comment)?;
+                        self.gritee.issue_comment(&task.gritee_issue_id, &comment)?;
 
                         // Update task status to Merged
-                        self.grite.task_update_status(&task.task_id, TaskStatus::Merged)?;
+                        self.gritee.task_update_status(&task.task_id, TaskStatus::Merged)?;
 
                         // Clear retry schedule if any
                         self.retry_schedules.remove(&task.task_id);
@@ -352,13 +352,13 @@ impl RefineryWorkflow {
             }
             Err(e) => {
                 // Merge itself failed (conflict, etc.)
-                self.set_merge_label(&task.grite_issue_id, merge_labels::FAILED)?;
+                self.set_merge_label(&task.gritee_issue_id, merge_labels::FAILED)?;
 
                 let comment = format!(
                     "[merge]\nattempt = {}\nstrategy = \"{}\"\nresult = \"failed\"\nerror = \"{}\"\n[/merge]",
                     attempt, self.config.rebase_strategy, e
                 );
-                self.grite.issue_comment(&task.grite_issue_id, &comment)?;
+                self.gritee.issue_comment(&task.gritee_issue_id, &comment)?;
 
                 // Emit merge failed event
                 self.event_emitter.merge_failed(&task.task_id, &e.to_string(), attempt);
@@ -383,7 +383,7 @@ impl RefineryWorkflow {
         // Hard reset to pre-merge state
         if let Err(e) = self.run_git(&["reset", "--hard", pre_merge_sha]) {
             // Failed to rollback - this is serious, mark as failed
-            self.set_merge_label(&task.grite_issue_id, merge_labels::FAILED)?;
+            self.set_merge_label(&task.gritee_issue_id, merge_labels::FAILED)?;
             return Err(WorkflowError::GitFailed(format!(
                 "Failed to rollback merge: {}",
                 e
@@ -405,7 +405,7 @@ impl RefineryWorkflow {
         );
 
         // Update label to retry-pending
-        self.set_merge_label(&task.grite_issue_id, merge_labels::RETRY_PENDING)?;
+        self.set_merge_label(&task.gritee_issue_id, merge_labels::RETRY_PENDING)?;
 
         // Post rollback comment
         let retry_time = chrono::DateTime::from_timestamp(retry_at, 0)
@@ -416,7 +416,7 @@ impl RefineryWorkflow {
             "[rollback]\nreason = \"{}\"\nreset_to = \"{}\"\nretry_at = \"{}\"\nbackoff_secs = {}\nattempt = {}\n[/rollback]",
             reason, pre_merge_sha, retry_time, backoff_secs, attempt
         );
-        self.grite.issue_comment(&task.grite_issue_id, &comment)?;
+        self.gritee.issue_comment(&task.gritee_issue_id, &comment)?;
 
         // Emit rollback and retry scheduled events
         self.event_emitter.merge_rolled_back(&task.task_id, pre_merge_sha, reason);
@@ -613,11 +613,11 @@ impl RefineryWorkflow {
     fn set_merge_label(&self, issue_id: &str, label: &str) -> Result<(), WorkflowError> {
         // Remove all merge labels first
         for old_label in merge_labels::all() {
-            let _ = self.grite.issue_label_remove(issue_id, &[old_label]);
+            let _ = self.gritee.issue_label_remove(issue_id, &[old_label]);
         }
 
         // Add new label
-        self.grite.issue_label_add(issue_id, &[label])?;
+        self.gritee.issue_label_add(issue_id, &[label])?;
         Ok(())
     }
 

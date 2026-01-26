@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-/// Brat - Multi-agent coding harness backed by Grit
+/// Brat - Multi-agent coding harness backed by Grite
 #[derive(Parser, Debug)]
 #[command(name = "brat", version, about, long_about = None)]
 pub struct Cli {

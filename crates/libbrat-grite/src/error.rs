@@ -1,21 +1,21 @@
 use thiserror::Error;
 
-/// Errors that can occur when interacting with Grite.
+/// Errors that can occur when interacting with Gritee.
 #[derive(Debug, Error)]
-pub enum GriteError {
-    /// Grit command failed to execute or returned an error.
-    #[error("grite command failed: {0}")]
+pub enum GriteeError {
+    /// Grite command failed to execute or returned an error.
+    #[error("gritee command failed: {0}")]
     CommandFailed(String),
 
     /// Entity not found.
     #[error("not found: {0}")]
     NotFound(String),
 
-    /// Failed to parse response from Grite.
+    /// Failed to parse response from Gritee.
     #[error("parse error: {0}")]
     ParseError(String),
 
-    /// Unexpected response from Grite.
+    /// Unexpected response from Gritee.
     #[error("unexpected response: {0}")]
     UnexpectedResponse(String),
 

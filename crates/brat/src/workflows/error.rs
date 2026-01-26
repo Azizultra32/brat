@@ -1,7 +1,7 @@
 //! Workflow-specific error types.
 
 use libbrat_engine::EngineError;
-use libbrat_grite::GriteError;
+use libbrat_gritee::GriteeError;
 use libbrat_session::SessionMonitorError;
 use libbrat_worktree::WorktreeError;
 use thiserror::Error;
@@ -9,9 +9,9 @@ use thiserror::Error;
 /// Errors that can occur during workflow execution.
 #[derive(Debug, Error)]
 pub enum WorkflowError {
-    /// Grit operation failed.
-    #[error("grite error: {0}")]
-    Grit(#[from] GriteError),
+    /// Grite operation failed.
+    #[error("gritee error: {0}")]
+    Grite(#[from] GriteeError),
 
     /// Session monitor operation failed.
     #[error("session error: {0}")]

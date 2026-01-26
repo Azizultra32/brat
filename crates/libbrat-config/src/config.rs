@@ -4,7 +4,7 @@ use std::path::Path;
 /// Brat harness configuration.
 ///
 /// This is stored in `.brat/config.toml` and controls harness behavior.
-/// Grit configuration remains separate in `.git/grite/config.toml`.
+/// Grite configuration remains separate in `.git/gritee/config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BratConfig {
@@ -82,14 +82,14 @@ impl Default for RolesConfig {
 #[serde(default)]
 pub struct BratdConfig {
     pub enabled: bool,
-    pub start_grite_daemon: bool,
+    pub start_gritee_daemon: bool,
 }
 
 impl Default for BratdConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            start_grite_daemon: false,
+            start_gritee_daemon: false,
         }
     }
 }
@@ -107,7 +107,7 @@ impl Default for SwarmConfig {
     fn default() -> Self {
         Self {
             max_polecats: 6,
-            worktree_root: ".grite/worktrees".to_string(),
+            worktree_root: ".gritee/worktrees".to_string(),
             engine: "codex".to_string(),
         }
     }

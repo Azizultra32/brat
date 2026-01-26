@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use chrono::Utc;
 use uuid::Uuid;
 
-use libbrat_grite::{DependencyType, GriteClient};
+use libbrat_gritee::{DependencyType, GriteeClient};
 
 use crate::error::WorkflowError;
 use crate::parser::WorkflowParser;
@@ -30,14 +30,14 @@ pub struct WorkflowInstance {
 
 /// Executor for running workflow templates.
 pub struct WorkflowExecutor {
-    /// Grite client for creating convoys/tasks.
-    grite: GriteClient,
+    /// Gritee client for creating convoys/tasks.
+    gritee: GriteeClient,
 }
 
 impl WorkflowExecutor {
-    /// Create a new executor with the given Grite client.
-    pub fn new(grite: GriteClient) -> Self {
-        Self { grite }
+    /// Create a new executor with the given Gritee client.
+    pub fn new(gritee: GriteeClient) -> Self {
+        Self { gritee }
     }
 
     /// Execute a workflow template with the given variables.
@@ -78,7 +78,7 @@ impl WorkflowExecutor {
             instance_id, template.name, complete_vars
         );
 
-        let convoy = self.grite.convoy_create(&convoy_title, Some(&convoy_body))?;
+        let convoy = self.gritee.convoy_create(&convoy_title, Some(&convoy_body))?;
 
         // Create tasks based on workflow type
         let task_ids = match template.workflow_type {
@@ -105,7 +105,7 @@ impl WorkflowExecutor {
         instance_id: &str,
     ) -> Result<Vec<String>, WorkflowError> {
         let mut task_ids = Vec::new();
-        let mut step_to_task: HashMap<String, (String, String)> = HashMap::new(); // step_id -> (task_id, grite_issue_id)
+        let mut step_to_task: HashMap<String, (String, String)> = HashMap::new(); // step_id -> (task_id, gritee_issue_id)
 
         // Topological sort for dependency ordering
         let ordered_steps = self.topological_sort_steps(template)?;
@@ -120,15 +120,15 @@ impl WorkflowExecutor {
                 body, template.name, instance_id, step.id
             );
 
-            let task = self.grite.task_create(convoy_id, &title, Some(&body))?;
+            let task = self.gritee.task_create(convoy_id, &title, Some(&body))?;
 
-            // Add dependencies using grite DAG
+            // Add dependencies using gritee DAG
             for dep_step_id in &step.needs {
-                if let Some((_, dep_grite_issue_id)) = step_to_task.get(dep_step_id) {
+                if let Some((_, dep_gritee_issue_id)) = step_to_task.get(dep_step_id) {
                     // This task depends on the dependency task
-                    if let Err(e) = self.grite.task_dep_add(
-                        &task.grite_issue_id,
-                        dep_grite_issue_id,
+                    if let Err(e) = self.gritee.task_dep_add(
+                        &task.gritee_issue_id,
+                        dep_gritee_issue_id,
                         DependencyType::DependsOn,
                     ) {
                         // Log but don't fail - dependency tracking is optional
@@ -140,7 +140,7 @@ impl WorkflowExecutor {
                 }
             }
 
-            step_to_task.insert(step.id.clone(), (task.task_id.clone(), task.grite_issue_id.clone()));
+            step_to_task.insert(step.id.clone(), (task.task_id.clone(), task.gritee_issue_id.clone()));
             task_ids.push(task.task_id);
         }
 
@@ -156,7 +156,7 @@ impl WorkflowExecutor {
         instance_id: &str,
     ) -> Result<Vec<String>, WorkflowError> {
         let mut task_ids = Vec::new();
-        let mut leg_grite_issue_ids = Vec::new();
+        let mut leg_gritee_issue_ids = Vec::new();
 
         // Create a task for each leg (all start as queued - parallel execution)
         for leg in &template.legs {
@@ -169,8 +169,8 @@ impl WorkflowExecutor {
                 body, template.name, instance_id, leg.id
             );
 
-            let task = self.grite.task_create(convoy_id, &title, Some(&body))?;
-            leg_grite_issue_ids.push(task.grite_issue_id.clone());
+            let task = self.gritee.task_create(convoy_id, &title, Some(&body))?;
+            leg_gritee_issue_ids.push(task.gritee_issue_id.clone());
             task_ids.push(task.task_id);
         }
 
@@ -185,12 +185,12 @@ impl WorkflowExecutor {
                 body, template.name, instance_id
             );
 
-            let task = self.grite.task_create(convoy_id, &title, Some(&body))?;
+            let task = self.gritee.task_create(convoy_id, &title, Some(&body))?;
 
-            // Add dependencies from synthesis to all legs using grite DAG
-            for leg_issue_id in &leg_grite_issue_ids {
-                if let Err(e) = self.grite.task_dep_add(
-                    &task.grite_issue_id,
+            // Add dependencies from synthesis to all legs using gritee DAG
+            for leg_issue_id in &leg_gritee_issue_ids {
+                if let Err(e) = self.gritee.task_dep_add(
+                    &task.gritee_issue_id,
                     leg_issue_id,
                     DependencyType::DependsOn,
                 ) {

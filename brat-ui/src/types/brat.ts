@@ -20,7 +20,7 @@ export interface TaskCounts {
 // Convoy interface
 export interface Convoy {
   convoy_id: string;
-  grit_issue_id: string;
+  grite_issue_id: string;
   title: string;
   body: string;
   status: string;
@@ -34,7 +34,7 @@ export interface ConvoyWithCounts extends Convoy {
 // Task interface
 export interface Task {
   task_id: string;
-  grit_issue_id: string;
+  grite_issue_id: string;
   convoy_id: string;
   title: string;
   body: string;
@@ -45,7 +45,7 @@ export interface Task {
 export interface Session {
   session_id: string;
   task_id: string;
-  grit_issue_id: string;
+  grite_issue_id: string;
   engine: string;
   status: string;
   pid: number | null;

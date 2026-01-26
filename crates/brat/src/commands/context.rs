@@ -120,9 +120,9 @@ pub fn run(cli: &Cli, cmd: &ContextCommand) -> Result<(), BratError> {
 fn run_index(cli: &Cli, args: &ContextIndexArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
     let paths: Vec<&str> = args.path.iter().map(|s| s.as_str()).collect();
     let result = client.context_index(&paths, args.force, args.pattern.as_deref())?;
 
@@ -150,9 +150,9 @@ fn run_index(cli: &Cli, args: &ContextIndexArgs) -> Result<(), BratError> {
 fn run_query(cli: &Cli, args: &ContextQueryArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
     let matches = client.context_query(&args.query)?;
 
     let output = ContextQueryOutput {
@@ -186,9 +186,9 @@ fn run_query(cli: &Cli, args: &ContextQueryArgs) -> Result<(), BratError> {
 fn run_show(cli: &Cli, args: &ContextShowArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
     let file_ctx = client.context_show(&args.path)?;
 
     let output = ContextShowOutput {
@@ -230,9 +230,9 @@ fn run_show(cli: &Cli, args: &ContextShowArgs) -> Result<(), BratError> {
 fn run_project(cli: &Cli, args: &ContextProjectArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
 
     if let Some(key) = &args.key {
         // Get single key
@@ -250,7 +250,7 @@ fn run_project(cli: &Cli, args: &ContextProjectArgs) -> Result<(), BratError> {
                 output_success(cli, output);
             }
             None => {
-                return Err(BratError::GriteCommandFailed(format!(
+                return Err(BratError::GriteeCommandFailed(format!(
                     "project context key '{}' not found",
                     key
                 )));
@@ -292,9 +292,9 @@ fn run_project(cli: &Cli, args: &ContextProjectArgs) -> Result<(), BratError> {
 fn run_set(cli: &Cli, args: &ContextSetArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
     client.context_project_set(&args.key, &args.value)?;
 
     let output = ContextSetOutput {

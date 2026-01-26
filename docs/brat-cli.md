@@ -1,6 +1,6 @@
 # Brat CLI (harness)
 
-The Brat CLI is the harness control plane. It orchestrates roles and uses Grit for all task/memory state.
+The Brat CLI is the harness control plane. It orchestrates roles and uses Grite for all task/memory state.
 
 ## Principles
 
@@ -8,7 +8,7 @@ The Brat CLI is the harness control plane. It orchestrates roles and uses Grit f
 - Structured output via `--json`
 - Safe by default; destructive actions require explicit flags
 - Streaming and waiting require explicit flags (`--follow`, `--wait --timeout`)
-- Single CLI: `brat` wraps Grit; `grit` is for debugging only
+- Single CLI: `brat` wraps Grite; `grite` is for debugging only
 - Daemon auto-starts on commands that benefit from it (disable with `--no-daemon`)
 
 ## Global flags
@@ -69,9 +69,9 @@ The Brat CLI is the harness control plane. It orchestrates roles and uses Grit f
 ## Doctor command
 
 - `brat doctor --check`: read-only harness health validation
-- `brat doctor --rebuild`: rebuilds harness state (calls `grit rebuild` internally)
+- `brat doctor --rebuild`: rebuilds harness state (calls `grite rebuild` internally)
 
-For substrate-level health checks, use `grit doctor --fix` directly.
+For substrate-level health checks, use `grite doctor --fix` directly.
 
 ## Output
 
@@ -80,13 +80,13 @@ For substrate-level health checks, use `grit doctor --fix` directly.
 - `brat status --json` includes an `interventions` array with recommended remediation commands (see `docs/usability.md`).
 - `brat status --json --all-repos` returns a `repos` array (see `docs/brat-status-schema.md`).
 
-## Relationship to Grit
+## Relationship to Grite
 
-Brat reads and writes Grit issues, comments, labels, and locks. It never writes tracked files for metadata.
+Brat reads and writes Grite issues, comments, labels, and locks. It never writes tracked files for metadata.
 
 `brat init` behavior:
 
-- Initializes the Grit ledger (equivalent to `grit init`)
+- Initializes the Grite ledger (equivalent to `grite init`)
 - Creates `.brat/config.toml` if missing (unless `--no-config`)
 - Starts `bratd` unless `--no-daemon`
 - Optionally creates the tmux control room (unless `--no-tmux`)

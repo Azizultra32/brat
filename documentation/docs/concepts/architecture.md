@@ -8,10 +8,10 @@ Brat is organized in layers, each with a clear responsibility.
 ┌─────────────────────────────────────────────────────────────┐
 │                       Your Repository                        │
 ├──────────────────────────┬──────────────────────────────────┤
-│  .brat/                  │  refs/grit/wal                   │
+│  .brat/                  │  refs/grite/wal                   │
 │  ├─ config.toml          │  └─ append-only event log        │
 │  └─ workflows/           │                                  │
-│     ├─ feature.yaml      │  .git/grit/actors/<id>/sled/     │
+│     ├─ feature.yaml      │  .git/grite/actors/<id>/sled/     │
 │     ├─ fix-bug.yaml      │  └─ local materialized view      │
 │     └─ code-review.yaml  │                                  │
 ├──────────────────────────┴──────────────────────────────────┤
@@ -20,7 +20,7 @@ Brat is organized in layers, each with a clear responsibility.
 │  │ Mayor  │ │ Witness │ │ Refinery │ │ Deacon │            │
 │  └────────┘ └─────────┘ └──────────┘ └────────┘            │
 ├─────────────────────────────────────────────────────────────┤
-│                   Grit Substrate Layer                       │
+│                   Grite Substrate Layer                       │
 │  Events • Issues • Labels • Comments • Locks • Sync         │
 ├─────────────────────────────────────────────────────────────┤
 │                    AI Engine Adapters                        │
@@ -41,11 +41,11 @@ The bottom layer interfaces with AI coding tools. Each engine adapter:
 
 Supported engines include Claude Code, Aider, Codex, OpenCode, Continue, and Gemini.
 
-### 2. Grit Substrate
+### 2. Grite Substrate
 
-[Grit](https://github.com/neul-labs/grit) provides the persistence layer:
+[Grite](https://github.com/neul-labs/grite) provides the persistence layer:
 
-- **Write-Ahead Log (WAL)** - Append-only event storage in `refs/grit/wal`
+- **Write-Ahead Log (WAL)** - Append-only event storage in `refs/grite/wal`
 - **Issues** - Track convoys and tasks
 - **Labels** - Store status and metadata
 - **Comments** - Record progress and outputs
@@ -78,33 +78,33 @@ Your code, plus:
 sequenceDiagram
     participant User
     participant Mayor
-    participant Grit
+    participant Grite
     participant Witness
     participant Engine
     participant Refinery
 
     User->>Mayor: Ask to analyze code
-    Mayor->>Grit: Create convoy issue
-    Mayor->>Grit: Create task issues
+    Mayor->>Grite: Create convoy issue
+    Mayor->>Grite: Create task issues
 
-    Witness->>Grit: Query queued tasks
+    Witness->>Grite: Query queued tasks
     Witness->>Engine: Spawn session
     Engine->>Engine: Work on task
     Engine-->>Witness: Complete
-    Witness->>Grit: Update task status
+    Witness->>Grite: Update task status
 
-    Refinery->>Grit: Query completed tasks
+    Refinery->>Grite: Query completed tasks
     Refinery->>Refinery: Apply merge policy
-    Refinery->>Grit: Update merge status
+    Refinery->>Grite: Update merge status
 ```
 
 ## Storage Locations
 
 | Path | Purpose |
 |------|---------|
-| `refs/grit/wal` | Append-only event log |
-| `.git/grit/actors/<id>/sled/` | Local materialized view per actor |
-| `.git/grit/config.toml` | Repo-level Grit config |
+| `refs/grite/wal` | Append-only event log |
+| `.git/grite/actors/<id>/sled/` | Local materialized view per actor |
+| `.git/grite/config.toml` | Repo-level Grite config |
 | `.brat/config.toml` | Brat configuration |
 | `.brat/workflows/` | Workflow templates |
 
@@ -152,7 +152,7 @@ Using git branches for coordination causes:
 - Dirty working trees
 - Race conditions between processes
 
-Brat stores all coordination state in Grit refs, keeping your working tree clean.
+Brat stores all coordination state in Grite refs, keeping your working tree clean.
 
 ### Why Multiple Roles?
 

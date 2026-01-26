@@ -19,7 +19,7 @@ session_id = "s-20250114-7b3d"
 role = "witness"
 session_type = "polecat"
 engine = "codex"
-worktree = ".grit/worktrees/polecat-3"
+worktree = ".grite/worktrees/polecat-3"
 pid = 12345
 started_ts = 1700000000000
 last_heartbeat_ts = 1700000005000
@@ -47,7 +47,7 @@ last_output_ref = "sha256:..."
 - `exit_reason`
 - `last_output_ref`
 
-`actor_id` is implied by the Grit event author; it does not need to be duplicated in the comment.
+`actor_id` is implied by the Grite event author; it does not need to be duplicated in the comment.
 
 ## Allowed values
 
@@ -72,7 +72,7 @@ On exit, set:
 
 ## Log storage
 
-Session logs are written to `.grit/logs/<session_id>.log`. `last_output_ref` is the SHA-256 hash of that file in the form `sha256:<hex>`.
+Session logs are written to `.grite/logs/<session_id>.log`. `last_output_ref` is the SHA-256 hash of that file in the form `sha256:<hex>`.
 
 ## Parsing rules
 

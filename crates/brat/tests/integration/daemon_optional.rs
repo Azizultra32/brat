@@ -1,10 +1,10 @@
 //! Test 3: Daemon optional
 //!
-//! Verifies that Brat operations work correctly without grite-daemon running.
+//! Verifies that Brat operations work correctly without gritee-daemon running.
 //! All commands should operate directly on the git-based ledger.
 //!
 //! Scenario:
-//! 1. Initialize Brat with --no-daemon (no grite-daemon)
+//! 1. Initialize Brat with --no-daemon (no gritee-daemon)
 //! 2. Create convoy
 //! 3. Create task
 //! 4. Update task status
@@ -19,7 +19,7 @@ use super::helpers::TestRepo;
 #[derive(Debug, Deserialize)]
 struct ConvoyCreateData {
     convoy_id: String,
-    grite_issue_id: String,
+    gritee_issue_id: String,
     title: String,
     status: String,
 }
@@ -28,7 +28,7 @@ struct ConvoyCreateData {
 #[derive(Debug, Deserialize)]
 struct TaskCreateData {
     task_id: String,
-    grite_issue_id: String,
+    gritee_issue_id: String,
     convoy_id: String,
     title: String,
     status: String,

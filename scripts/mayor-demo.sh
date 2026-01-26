@@ -345,8 +345,8 @@ EOF
 git add .
 git commit -m "Initial commit: sample Python project" --quiet
 
-# Initialize grit
-grit init >/dev/null 2>&1
+# Initialize grite
+grite init >/dev/null 2>&1
 
 # Initialize brat
 "$BRAT_BIN" init --no-daemon --no-tmux >/dev/null 2>&1
@@ -494,16 +494,16 @@ divider
 pause 2
 
 # ============================================================================
-# STEP 7: View Grit Issues (Raw Data)
+# STEP 7: View Grite Issues (Raw Data)
 # ============================================================================
 
-step "7" "Viewing raw grit issues"
+step "7" "Viewing raw grite issues"
 
-info "Grit stores convoys and tasks as labeled issues"
+info "Grite stores convoys and tasks as labeled issues"
 echo ""
 
-show_command "grit issue list"
-grit issue list 2>/dev/null | head -20
+show_command "grite issue list"
+grite issue list 2>/dev/null | head -20
 
 divider
 pause 2
@@ -559,7 +559,7 @@ banner "DEMO COMPLETE"
 echo -e "${BOLD}What we demonstrated:${NC}"
 echo ""
 echo "  1. Created a test repository with sample Python code"
-echo "  2. Initialized brat harness (git + grit + brat)"
+echo "  2. Initialized brat harness (git + grite + brat)"
 if [ "$WITH_UI" = true ]; then
 echo "  3. Started the Web UI dashboard"
 echo "  4. Started the AI Mayor (Claude Code orchestrator)"

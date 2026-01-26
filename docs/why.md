@@ -1,21 +1,21 @@
-# Why Brat (Grit-backed)
+# Why Brat (Grite-backed)
 
 ## What it avoids
 
 1. Dirty working trees and phantom diffs
-   - Metadata lives in `refs/grit/*` and `.git/grit/`, never in tracked files.
+   - Metadata lives in `refs/grite/*` and `.git/grite/`, never in tracked files.
 
 2. Destructive repair workflows
    - Repair is monotonic (rebuild projections), never rewrite WAL refs.
 
 3. Daemon-required correctness
-   - Every CLI command is a complete transaction; `gritd` is optional and `bratd` is not required for correctness.
+   - Every CLI command is a complete transaction; `grited` is optional and `bratd` is not required for correctness.
 
 4. Branch-topology heuristics
    - Coordination state is not encoded in branches; merges are set-union of events.
 
 5. Silent session failures
-   - Harness posts structured updates via Grit comments and labels.
+   - Harness posts structured updates via Grite comments and labels.
 
 6. Blocking CLIs
    - Streaming and waiting are explicit; defaults are non-blocking.

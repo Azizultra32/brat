@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use libbrat_config::InterventionsConfig;
-use libbrat_grite::{GriteClient, SessionStatus};
+use libbrat_gritee::{GriteeClient, SessionStatus};
 use libbrat_worktree::WorktreeManager;
 use serde::Serialize;
 
@@ -43,12 +43,12 @@ impl ReconcileResult {
 
 /// Workflow for session reconciliation.
 ///
-/// Reconciles Grit session state with reality by:
+/// Reconciles Grite session state with reality by:
 /// 1. Detecting stale sessions (no heartbeat for stale_session_ms)
 /// 2. Marking crashed sessions as Exit
 /// 3. Cleaning up orphaned worktrees
 pub struct ReconcileWorkflow {
-    grite: GriteClient,
+    gritee: GriteeClient,
     worktree_manager: Option<WorktreeManager>,
     stale_session_ms: u64,
 }
@@ -58,16 +58,16 @@ impl ReconcileWorkflow {
     ///
     /// # Arguments
     ///
-    /// * `grite` - Grite client for session state.
+    /// * `gritee` - Gritee client for session state.
     /// * `worktree_manager` - Optional worktree manager for cleanup.
     /// * `config` - Interventions config with stale session threshold.
     pub fn new(
-        grite: GriteClient,
+        gritee: GriteeClient,
         worktree_manager: Option<WorktreeManager>,
         config: InterventionsConfig,
     ) -> Self {
         Self {
-            grite,
+            gritee,
             worktree_manager,
             stale_session_ms: config.stale_session_ms,
         }
@@ -76,7 +76,7 @@ impl ReconcileWorkflow {
     /// Run reconciliation once.
     ///
     /// This performs the following steps:
-    /// 1. Get all active sessions from Grite
+    /// 1. Get all active sessions from Gritee
     /// 2. Identify stale sessions based on heartbeat
     /// 3. Mark stale sessions as crashed (Exit status)
     /// 4. Clean up orphaned worktrees
@@ -84,7 +84,7 @@ impl ReconcileWorkflow {
         let mut result = ReconcileResult::default();
 
         // Step 1: Get active sessions
-        let sessions = self.grite.session_list(None)?;
+        let sessions = self.gritee.session_list(None)?;
         let active_sessions: Vec<_> = sessions
             .into_iter()
             .filter(|s| s.status != SessionStatus::Exit)
@@ -104,7 +104,7 @@ impl ReconcileWorkflow {
 
             if age_ms > self.stale_session_ms as i64 && age_ms > 0 {
                 // Session is stale - mark as crashed
-                match self.grite.session_exit(
+                match self.gritee.session_exit(
                     &session.session_id,
                     -1,
                     "crash-recovery",

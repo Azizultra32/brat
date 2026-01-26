@@ -18,7 +18,7 @@ Before you begin, make sure you have:
 
     ---
 
-    Install Grit and Brat on your system.
+    Install Grite and Brat on your system.
 
     [:octicons-arrow-right-24: Install](installation.md)
 

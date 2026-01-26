@@ -80,15 +80,15 @@ Run validation manually:
 brat config validate
 ```
 
-## Relationship to Grit
+## Relationship to Grite
 
 | Config | Location | Purpose |
 |--------|----------|---------|
-| **Grit** | `.git/grit/config.toml` | Actor defaults, substrate settings |
+| **Grite** | `.git/grite/config.toml` | Actor defaults, substrate settings |
 | **Brat** | `.brat/config.toml` | Engine, daemon, workflow settings |
 
 Key differences:
 
 - Brat config is typically gitignored
-- Grit config may be committed
+- Grite config may be committed
 - Both are TOML format

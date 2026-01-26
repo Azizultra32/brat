@@ -14,7 +14,7 @@ use super::status::ErrorResponse;
 #[derive(Serialize)]
 pub struct ConvoyResponse {
     pub convoy_id: String,
-    pub grite_issue_id: String,
+    pub gritee_issue_id: String,
     pub title: String,
     pub body: String,
     pub status: String,
@@ -42,7 +42,7 @@ async fn list_convoys(
         )
     })?;
 
-    let convoys = ctx.grite.convoy_list().map_err(|e| {
+    let convoys = ctx.gritee.convoy_list().map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -55,7 +55,7 @@ async fn list_convoys(
         .into_iter()
         .map(|c| ConvoyResponse {
             convoy_id: c.convoy_id,
-            grite_issue_id: c.grite_issue_id,
+            gritee_issue_id: c.gritee_issue_id,
             title: c.title,
             body: c.body,
             status: format!("{:?}", c.status).to_lowercase(),
@@ -86,7 +86,7 @@ async fn create_convoy(
         Some(req.body.as_str())
     };
 
-    let convoy = ctx.grite.convoy_create(&req.title, body).map_err(|e| {
+    let convoy = ctx.gritee.convoy_create(&req.title, body).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -99,7 +99,7 @@ async fn create_convoy(
         StatusCode::CREATED,
         Json(ConvoyResponse {
             convoy_id: convoy.convoy_id,
-            grite_issue_id: convoy.grite_issue_id,
+            gritee_issue_id: convoy.gritee_issue_id,
             title: convoy.title,
             body: convoy.body,
             status: format!("{:?}", convoy.status).to_lowercase(),
@@ -122,7 +122,7 @@ async fn get_convoy(
     })?;
 
     // List convoys and find the one with matching ID
-    let convoys = ctx.grite.convoy_list().map_err(|e| {
+    let convoys = ctx.gritee.convoy_list().map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -145,7 +145,7 @@ async fn get_convoy(
 
     Ok(Json(ConvoyResponse {
         convoy_id: convoy.convoy_id,
-        grite_issue_id: convoy.grite_issue_id,
+        gritee_issue_id: convoy.gritee_issue_id,
         title: convoy.title,
         body: convoy.body,
         status: format!("{:?}", convoy.status).to_lowercase(),

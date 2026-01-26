@@ -4,28 +4,28 @@ use std::process::Command;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 
-use crate::error::GriteError;
+use crate::error::GriteeError;
 use crate::id::{
     generate_convoy_id, generate_session_id, generate_task_id, is_valid_convoy_id,
     is_valid_session_id, is_valid_task_id,
 };
 use crate::state_machine::StateMachine;
 use crate::types::{
-    ContextIndexResult, Convoy, ConvoyStatus, DependencyType, FileContext, GriteIssue,
-    GriteIssueSummary, ProjectContextEntry, Session, SessionRole, SessionStatus, SessionType,
+    ContextIndexResult, Convoy, ConvoyStatus, DependencyType, FileContext, GriteeIssue,
+    GriteeIssueSummary, ProjectContextEntry, Session, SessionRole, SessionStatus, SessionType,
     Symbol, SymbolMatch, Task, TaskDependency, TaskStatus,
 };
 
-/// Expected Grite CLI JSON schema version.
+/// Expected Gritee CLI JSON schema version.
 const EXPECTED_GRIT_SCHEMA_VERSION: u32 = 1;
 
-/// JSON envelope from Gritee CLI responses (used by lock commands).
+/// JSON envelope from Griteee CLI responses (used by lock commands).
 #[derive(Debug, Deserialize)]
 struct JsonResponse<T> {
     #[serde(default)]
     schema_version: Option<u32>,
     #[serde(default)]
-    #[allow(dead_code)] // Used by Grit but not checked in our code
+    #[allow(dead_code)] // Used by Grite but not checked in our code
     ok: bool,
     data: Option<T>,
     error: Option<JsonError>,
@@ -68,7 +68,7 @@ struct IssueCreateResponse {
     event_id: Option<String>,
 }
 
-/// Raw issue summary from grite issue list (new format).
+/// Raw issue summary from gritee issue list (new format).
 #[derive(Debug, Deserialize)]
 struct RawIssueSummary {
     issue_id: IssueIdFormat,
@@ -84,8 +84,8 @@ struct RawIssueSummary {
 }
 
 impl RawIssueSummary {
-    fn into_grite_issue_summary(self) -> GriteIssueSummary {
-        GriteIssueSummary {
+    fn into_gritee_issue_summary(self) -> GriteeIssueSummary {
+        GriteeIssueSummary {
             issue_id: self.issue_id.to_hex(),
             title: self.title,
             state: self.state,
@@ -109,7 +109,7 @@ struct IssueShowResponse {
     events: Option<Vec<serde_json::Value>>,
 }
 
-/// Raw issue from grite issue show (new format).
+/// Raw issue from gritee issue show (new format).
 #[derive(Debug, Deserialize)]
 struct RawIssue {
     issue_id: IssueIdFormat,
@@ -128,7 +128,7 @@ struct RawIssue {
     comment_count: u32,
 }
 
-/// Raw comment from grite issue show.
+/// Raw comment from gritee issue show.
 #[derive(Debug, Deserialize)]
 struct RawComment {
     #[allow(dead_code)]
@@ -141,8 +141,8 @@ struct RawComment {
 }
 
 impl RawIssue {
-    fn into_grite_issue(self) -> GriteIssue {
-        GriteIssue {
+    fn into_gritee_issue(self) -> GriteeIssue {
+        GriteeIssue {
             issue_id: self.issue_id.to_hex(),
             title: self.title,
             body: self.body,
@@ -179,7 +179,7 @@ pub struct LockResult {
     pub expires_unix_ms: Option<i64>,
 }
 
-/// Response from grite dep list command.
+/// Response from gritee dep list command.
 #[derive(Debug, Deserialize)]
 struct DepListResponse {
     #[allow(dead_code)]
@@ -197,7 +197,7 @@ struct DepListEntry {
     title: String,
 }
 
-/// Response from grite dep topo command.
+/// Response from gritee dep topo command.
 #[derive(Debug, Deserialize)]
 struct DepTopoResponse {
     issues: Vec<RawIssueSummary>,
@@ -205,7 +205,7 @@ struct DepTopoResponse {
     order: String,
 }
 
-/// Response from grite context index command.
+/// Response from gritee context index command.
 #[derive(Debug, Deserialize)]
 struct ContextIndexResponse {
     indexed: u32,
@@ -213,7 +213,7 @@ struct ContextIndexResponse {
     total_files: u32,
 }
 
-/// Response from grite context query command.
+/// Response from gritee context query command.
 #[derive(Debug, Deserialize)]
 struct ContextQueryResponse {
     #[allow(dead_code)]
@@ -230,7 +230,7 @@ struct ContextQueryMatch {
     path: String,
 }
 
-/// Response from grite context show command.
+/// Response from gritee context show command.
 #[derive(Debug, Deserialize)]
 struct ContextShowResponse {
     path: String,
@@ -251,14 +251,14 @@ struct ContextSymbol {
     line_end: u32,
 }
 
-/// Response from grite context project (single key).
+/// Response from gritee context project (single key).
 #[derive(Debug, Deserialize)]
 struct ContextProjectSingleResponse {
     key: String,
     value: String,
 }
 
-/// Response from grite context project (list).
+/// Response from gritee context project (list).
 #[derive(Debug, Deserialize)]
 struct ContextProjectListResponse {
     entries: Vec<ContextProjectEntry>,
@@ -273,23 +273,23 @@ struct ContextProjectEntry {
     value: String,
 }
 
-/// Client for interacting with the Grite CLI.
+/// Client for interacting with the Gritee CLI.
 #[derive(Clone)]
-pub struct GriteClient {
+pub struct GriteeClient {
     repo_root: PathBuf,
 }
 
-impl GriteClient {
-    /// Create a new GriteClient for the given repository root.
+impl GriteeClient {
+    /// Create a new GriteeClient for the given repository root.
     pub fn new(repo_root: impl Into<PathBuf>) -> Self {
         Self {
             repo_root: repo_root.into(),
         }
     }
 
-    /// Check if Grit is initialized in the repository.
+    /// Check if Grite is initialized in the repository.
     pub fn is_initialized(&self, git_dir: &Path) -> bool {
-        git_dir.join("grite").exists()
+        git_dir.join("gritee").exists()
     }
 
     /// Get the repository root path.
@@ -307,7 +307,7 @@ impl GriteClient {
         title: &str,
         body: &str,
         labels: &[String],
-    ) -> Result<String, GriteError> {
+    ) -> Result<String, GriteeError> {
         let mut args = vec!["issue", "create", "--title", title, "--body", body];
         for label in labels {
             args.push("--label");
@@ -323,7 +323,7 @@ impl GriteClient {
         &self,
         labels: &[&str],
         state: Option<&str>,
-    ) -> Result<Vec<GriteIssueSummary>, GriteError> {
+    ) -> Result<Vec<GriteeIssueSummary>, GriteeError> {
         let mut args = vec!["issue", "list"];
 
         if let Some(state) = state {
@@ -340,19 +340,19 @@ impl GriteClient {
         Ok(response
             .issues
             .into_iter()
-            .map(|r| r.into_grite_issue_summary())
+            .map(|r| r.into_gritee_issue_summary())
             .collect())
     }
 
     /// Get a single issue by ID.
-    pub fn issue_show(&self, issue_id: &str) -> Result<GriteIssue, GriteError> {
+    pub fn issue_show(&self, issue_id: &str) -> Result<GriteeIssue, GriteeError> {
         let args = vec!["issue", "show", issue_id];
         let response: IssueShowResponse = self.run_json_direct(&args)?;
-        Ok(response.issue.into_grite_issue())
+        Ok(response.issue.into_gritee_issue())
     }
 
     /// Add labels to an issue.
-    pub fn issue_label_add(&self, issue_id: &str, labels: &[&str]) -> Result<(), GriteError> {
+    pub fn issue_label_add(&self, issue_id: &str, labels: &[&str]) -> Result<(), GriteeError> {
         for label in labels {
             let args = vec!["issue", "label", "add", "--label", label, issue_id];
             let _: serde_json::Value = self.run_json_direct(&args)?;
@@ -361,7 +361,7 @@ impl GriteClient {
     }
 
     /// Remove labels from an issue.
-    pub fn issue_label_remove(&self, issue_id: &str, labels: &[&str]) -> Result<(), GriteError> {
+    pub fn issue_label_remove(&self, issue_id: &str, labels: &[&str]) -> Result<(), GriteeError> {
         for label in labels {
             let args = vec!["issue", "label", "remove", "--label", label, issue_id];
             // Ignore errors for labels that don't exist
@@ -371,7 +371,7 @@ impl GriteClient {
     }
 
     /// Add a comment to an issue.
-    pub fn issue_comment(&self, issue_id: &str, body: &str) -> Result<(), GriteError> {
+    pub fn issue_comment(&self, issue_id: &str, body: &str) -> Result<(), GriteeError> {
         let args = vec!["issue", "comment", issue_id, "--body", body];
         let _: serde_json::Value = self.run_json_direct(&args)?;
         Ok(())
@@ -382,7 +382,7 @@ impl GriteClient {
     // -------------------------------------------------------------------------
 
     /// Create a new convoy.
-    pub fn convoy_create(&self, title: &str, body: Option<&str>) -> Result<Convoy, GriteError> {
+    pub fn convoy_create(&self, title: &str, body: Option<&str>) -> Result<Convoy, GriteeError> {
         let convoy_id = generate_convoy_id();
         let labels = vec![
             "type:convoy".to_string(),
@@ -390,11 +390,11 @@ impl GriteClient {
             ConvoyStatus::Active.as_label().to_string(),
         ];
 
-        let grite_issue_id = self.issue_create(title, body.unwrap_or(""), &labels)?;
+        let gritee_issue_id = self.issue_create(title, body.unwrap_or(""), &labels)?;
 
         Ok(Convoy {
             convoy_id,
-            grite_issue_id,
+            gritee_issue_id,
             title: title.to_string(),
             body: body.unwrap_or("").to_string(),
             status: ConvoyStatus::Active,
@@ -402,7 +402,7 @@ impl GriteClient {
     }
 
     /// List all convoys.
-    pub fn convoy_list(&self) -> Result<Vec<Convoy>, GriteError> {
+    pub fn convoy_list(&self) -> Result<Vec<Convoy>, GriteeError> {
         let issues = self.issue_list(&["type:convoy"], Some("open"))?;
         issues
             .into_iter()
@@ -414,9 +414,9 @@ impl GriteClient {
     }
 
     /// Get a convoy by its Brat convoy ID.
-    pub fn convoy_get(&self, convoy_id: &str) -> Result<Convoy, GriteError> {
+    pub fn convoy_get(&self, convoy_id: &str) -> Result<Convoy, GriteeError> {
         if !is_valid_convoy_id(convoy_id) {
-            return Err(GriteError::InvalidId(convoy_id.to_string()));
+            return Err(GriteeError::InvalidId(convoy_id.to_string()));
         }
 
         let label = format!("convoy:{}", convoy_id);
@@ -427,7 +427,7 @@ impl GriteClient {
             .find(|issue| issue.labels.contains(&"type:convoy".to_string()))
             .map(|issue| parse_convoy_from_summary(&issue))
             .transpose()?
-            .ok_or_else(|| GriteError::NotFound(format!("convoy {}", convoy_id)))
+            .ok_or_else(|| GriteeError::NotFound(format!("convoy {}", convoy_id)))
     }
 
     // -------------------------------------------------------------------------
@@ -440,9 +440,9 @@ impl GriteClient {
         convoy_id: &str,
         title: &str,
         body: Option<&str>,
-    ) -> Result<Task, GriteError> {
+    ) -> Result<Task, GriteeError> {
         if !is_valid_convoy_id(convoy_id) {
-            return Err(GriteError::InvalidId(convoy_id.to_string()));
+            return Err(GriteeError::InvalidId(convoy_id.to_string()));
         }
 
         // Verify convoy exists
@@ -456,11 +456,11 @@ impl GriteClient {
             TaskStatus::Queued.as_label().to_string(),
         ];
 
-        let grite_issue_id = self.issue_create(title, body.unwrap_or(""), &labels)?;
+        let gritee_issue_id = self.issue_create(title, body.unwrap_or(""), &labels)?;
 
         Ok(Task {
             task_id,
-            grite_issue_id,
+            gritee_issue_id,
             convoy_id: convoy_id.to_string(),
             title: title.to_string(),
             body: body.unwrap_or("").to_string(),
@@ -469,13 +469,13 @@ impl GriteClient {
     }
 
     /// List tasks, optionally filtered by convoy.
-    pub fn task_list(&self, convoy_id: Option<&str>) -> Result<Vec<Task>, GriteError> {
+    pub fn task_list(&self, convoy_id: Option<&str>) -> Result<Vec<Task>, GriteeError> {
         let mut labels: Vec<&str> = vec!["type:task"];
 
         let convoy_label;
         if let Some(cid) = convoy_id {
             if !is_valid_convoy_id(cid) {
-                return Err(GriteError::InvalidId(cid.to_string()));
+                return Err(GriteeError::InvalidId(cid.to_string()));
             }
             convoy_label = format!("convoy:{}", cid);
             labels.push(&convoy_label);
@@ -494,9 +494,9 @@ impl GriteClient {
     /// Get a task by its Brat task ID.
     ///
     /// Unlike `task_list`, this returns the full task including body.
-    pub fn task_get(&self, task_id: &str) -> Result<Task, GriteError> {
+    pub fn task_get(&self, task_id: &str) -> Result<Task, GriteeError> {
         if !is_valid_task_id(task_id) {
-            return Err(GriteError::InvalidId(task_id.to_string()));
+            return Err(GriteeError::InvalidId(task_id.to_string()));
         }
 
         let label = format!("task:{}", task_id);
@@ -506,7 +506,7 @@ impl GriteClient {
         let summary = issues
             .into_iter()
             .find(|issue| issue.labels.contains(&"type:task".to_string()))
-            .ok_or_else(|| GriteError::NotFound(format!("task {}", task_id)))?;
+            .ok_or_else(|| GriteeError::NotFound(format!("task {}", task_id)))?;
 
         // Fetch full issue to get body
         let full_issue = self.issue_show(&summary.issue_id)?;
@@ -522,7 +522,7 @@ impl GriteClient {
         &self,
         task_id: &str,
         new_status: TaskStatus,
-    ) -> Result<(), GriteError> {
+    ) -> Result<(), GriteeError> {
         self.task_update_status_with_options(task_id, new_status, false)
     }
 
@@ -534,21 +534,21 @@ impl GriteClient {
         task_id: &str,
         new_status: TaskStatus,
         force: bool,
-    ) -> Result<(), GriteError> {
+    ) -> Result<(), GriteeError> {
         let task = self.task_get(task_id)?;
 
         // Validate state transition
         let state_machine = StateMachine::<TaskStatus>::new();
         state_machine
             .validate(task.status, new_status, force)
-            .map_err(|e| GriteError::InvalidStateTransition(e.to_string()))?;
+            .map_err(|e| GriteeError::InvalidStateTransition(e.to_string()))?;
 
         // Remove old status labels
         let old_labels: Vec<&str> = TaskStatus::all_labels().to_vec();
-        self.issue_label_remove(&task.grite_issue_id, &old_labels)?;
+        self.issue_label_remove(&task.gritee_issue_id, &old_labels)?;
 
         // Add new status label
-        self.issue_label_add(&task.grite_issue_id, &[new_status.as_label()])?;
+        self.issue_label_add(&task.gritee_issue_id, &[new_status.as_label()])?;
 
         Ok(())
     }
@@ -569,7 +569,7 @@ impl GriteClient {
         engine: &str,
         worktree: &str,
         pid: Option<u32>,
-    ) -> Result<Session, GriteError> {
+    ) -> Result<Session, GriteeError> {
         self.session_create_with_id(None, task_id, role, session_type, engine, worktree, pid)
     }
 
@@ -588,8 +588,8 @@ impl GriteClient {
         engine: &str,
         worktree: &str,
         pid: Option<u32>,
-    ) -> Result<Session, GriteError> {
-        // Validate task exists and get grite_issue_id
+    ) -> Result<Session, GriteeError> {
+        // Validate task exists and get gritee_issue_id
         let task = self.task_get(task_id)?;
 
         // Generate session ID if not provided
@@ -605,7 +605,7 @@ impl GriteClient {
         let session = Session {
             session_id: session_id.clone(),
             task_id: task_id.to_string(),
-            grite_issue_id: task.grite_issue_id.clone(),
+            gritee_issue_id: task.gritee_issue_id.clone(),
             role,
             session_type,
             engine: engine.to_string(),
@@ -621,11 +621,11 @@ impl GriteClient {
 
         // Post session comment
         let comment_body = format_session_comment(&session);
-        self.issue_comment(&task.grite_issue_id, &comment_body)?;
+        self.issue_comment(&task.gritee_issue_id, &comment_body)?;
 
         // Update task labels with session info
         self.issue_label_add(
-            &task.grite_issue_id,
+            &task.gritee_issue_id,
             &[
                 SessionStatus::Spawned.as_label(),
                 session_type.as_label(),
@@ -639,13 +639,13 @@ impl GriteClient {
     /// List active sessions, optionally filtered by task.
     ///
     /// Only returns sessions that are not in the Exit state.
-    pub fn session_list(&self, task_id: Option<&str>) -> Result<Vec<Session>, GriteError> {
+    pub fn session_list(&self, task_id: Option<&str>) -> Result<Vec<Session>, GriteeError> {
         // Build label filter
         let mut labels: Vec<&str> = vec!["type:task"];
         let task_label;
         if let Some(tid) = task_id {
             if !is_valid_task_id(tid) {
-                return Err(GriteError::InvalidId(tid.to_string()));
+                return Err(GriteeError::InvalidId(tid.to_string()));
             }
             task_label = format!("task:{}", tid);
             labels.push(&task_label);
@@ -678,9 +678,9 @@ impl GriteClient {
     }
 
     /// Get a session by its Brat session ID.
-    pub fn session_get(&self, session_id: &str) -> Result<Session, GriteError> {
+    pub fn session_get(&self, session_id: &str) -> Result<Session, GriteeError> {
         if !is_valid_session_id(session_id) {
-            return Err(GriteError::InvalidId(session_id.to_string()));
+            return Err(GriteeError::InvalidId(session_id.to_string()));
         }
 
         // Search all task issues for this session
@@ -697,7 +697,7 @@ impl GriteClient {
             }
         }
 
-        Err(GriteError::NotFound(format!("session {}", session_id)))
+        Err(GriteeError::NotFound(format!("session {}", session_id)))
     }
 
     /// Update session status with validation.
@@ -705,7 +705,7 @@ impl GriteClient {
         &self,
         session_id: &str,
         new_status: SessionStatus,
-    ) -> Result<(), GriteError> {
+    ) -> Result<(), GriteeError> {
         self.session_update_status_with_options(session_id, new_status, false)
     }
 
@@ -717,14 +717,14 @@ impl GriteClient {
         session_id: &str,
         new_status: SessionStatus,
         force: bool,
-    ) -> Result<(), GriteError> {
+    ) -> Result<(), GriteeError> {
         let session = self.session_get(session_id)?;
 
         // Validate state transition
         let state_machine = StateMachine::<SessionStatus>::new();
         state_machine
             .validate(session.status, new_status, force)
-            .map_err(|e| GriteError::InvalidStateTransition(e.to_string()))?;
+            .map_err(|e| GriteeError::InvalidStateTransition(e.to_string()))?;
 
         // Update session with new state
         let mut updated_session = session.clone();
@@ -737,12 +737,12 @@ impl GriteClient {
         );
 
         let comment_body = format_session_comment(&updated_session);
-        self.issue_comment(&session.grite_issue_id, &comment_body)?;
+        self.issue_comment(&session.gritee_issue_id, &comment_body)?;
 
         // Update labels: remove old session status, add new
         let old_labels: Vec<&str> = SessionStatus::all_labels().to_vec();
-        self.issue_label_remove(&session.grite_issue_id, &old_labels)?;
-        self.issue_label_add(&session.grite_issue_id, &[new_status.as_label()])?;
+        self.issue_label_remove(&session.gritee_issue_id, &old_labels)?;
+        self.issue_label_add(&session.gritee_issue_id, &[new_status.as_label()])?;
 
         Ok(())
     }
@@ -750,7 +750,7 @@ impl GriteClient {
     /// Record session heartbeat.
     ///
     /// Posts a new session comment with updated heartbeat timestamp.
-    pub fn session_heartbeat(&self, session_id: &str) -> Result<(), GriteError> {
+    pub fn session_heartbeat(&self, session_id: &str) -> Result<(), GriteeError> {
         let session = self.session_get(session_id)?;
 
         // Update session with new heartbeat
@@ -763,7 +763,7 @@ impl GriteClient {
         );
 
         let comment_body = format_session_comment(&updated_session);
-        self.issue_comment(&session.grite_issue_id, &comment_body)?;
+        self.issue_comment(&session.gritee_issue_id, &comment_body)?;
 
         Ok(())
     }
@@ -777,7 +777,7 @@ impl GriteClient {
         exit_code: i32,
         exit_reason: &str,
         last_output_ref: Option<&str>,
-    ) -> Result<(), GriteError> {
+    ) -> Result<(), GriteeError> {
         let session = self.session_get(session_id)?;
 
         // Build exit comment
@@ -794,12 +794,12 @@ impl GriteClient {
         );
 
         let comment_body = format_session_comment(&updated_session);
-        self.issue_comment(&session.grite_issue_id, &comment_body)?;
+        self.issue_comment(&session.gritee_issue_id, &comment_body)?;
 
         // Update labels
         let old_labels: Vec<&str> = SessionStatus::all_labels().to_vec();
-        self.issue_label_remove(&session.grite_issue_id, &old_labels)?;
-        self.issue_label_add(&session.grite_issue_id, &[SessionStatus::Exit.as_label()])?;
+        self.issue_label_remove(&session.gritee_issue_id, &old_labels)?;
+        self.issue_label_add(&session.gritee_issue_id, &[SessionStatus::Exit.as_label()])?;
 
         Ok(())
     }
@@ -813,8 +813,8 @@ impl GriteClient {
     /// Returns a `LockResult` indicating whether the lock was acquired.
     /// If the lock is already held by another actor, `acquired` will be false
     /// and `holder` will contain the current owner.
-    pub fn lock_acquire(&self, resource: &str, ttl_ms: i64) -> Result<LockResult, GriteError> {
-        // Convert milliseconds to seconds (grit now uses --ttl in seconds)
+    pub fn lock_acquire(&self, resource: &str, ttl_ms: i64) -> Result<LockResult, GriteeError> {
+        // Convert milliseconds to seconds (grite now uses --ttl in seconds)
         let ttl_seconds = (ttl_ms / 1000).max(1);
         let ttl_str = ttl_seconds.to_string();
         let args = vec!["lock", "acquire", resource, "--ttl", &ttl_str];
@@ -832,14 +832,14 @@ impl GriteClient {
     /// Release a lock on a resource.
     ///
     /// This is a best-effort operation; errors are logged but not fatal.
-    pub fn lock_release(&self, resource: &str) -> Result<(), GriteError> {
+    pub fn lock_release(&self, resource: &str) -> Result<(), GriteeError> {
         let args = vec!["lock", "release", resource];
         let _: serde_json::Value = self.run_json(&args)?;
         Ok(())
     }
 
     // -------------------------------------------------------------------------
-    // Dependency operations (grite issue dep)
+    // Dependency operations (gritee issue dep)
     // -------------------------------------------------------------------------
 
     /// Add a dependency between two tasks.
@@ -851,7 +851,7 @@ impl GriteClient {
         task_issue_id: &str,
         target_issue_id: &str,
         dep_type: DependencyType,
-    ) -> Result<(), GriteError> {
+    ) -> Result<(), GriteeError> {
         let args = vec![
             "issue",
             "dep",
@@ -872,7 +872,7 @@ impl GriteClient {
         task_issue_id: &str,
         target_issue_id: &str,
         dep_type: DependencyType,
-    ) -> Result<(), GriteError> {
+    ) -> Result<(), GriteeError> {
         let args = vec![
             "issue",
             "dep",
@@ -895,7 +895,7 @@ impl GriteClient {
         &self,
         task_issue_id: &str,
         reverse: bool,
-    ) -> Result<Vec<TaskDependency>, GriteError> {
+    ) -> Result<Vec<TaskDependency>, GriteeError> {
         let mut args = vec!["issue", "dep", "list", task_issue_id];
         if reverse {
             args.push("--reverse");
@@ -920,7 +920,7 @@ impl GriteClient {
     pub fn task_topo_order(
         &self,
         label: Option<&str>,
-    ) -> Result<Vec<GriteIssueSummary>, GriteError> {
+    ) -> Result<Vec<GriteeIssueSummary>, GriteeError> {
         let mut args = vec!["issue", "dep", "topo", "--state", "open"];
         if let Some(l) = label {
             args.push("--label");
@@ -931,12 +931,12 @@ impl GriteClient {
         Ok(response
             .issues
             .into_iter()
-            .map(|r| r.into_grite_issue_summary())
+            .map(|r| r.into_gritee_issue_summary())
             .collect())
     }
 
     // -------------------------------------------------------------------------
-    // Context operations (grite context)
+    // Context operations (gritee context)
     // -------------------------------------------------------------------------
 
     /// Index files for symbol extraction.
@@ -949,7 +949,7 @@ impl GriteClient {
         paths: &[&str],
         force: bool,
         pattern: Option<&str>,
-    ) -> Result<ContextIndexResult, GriteError> {
+    ) -> Result<ContextIndexResult, GriteeError> {
         let mut args = vec!["context", "index"];
         for path in paths {
             args.push("--path");
@@ -974,7 +974,7 @@ impl GriteClient {
     /// Query for symbols matching a pattern.
     ///
     /// Returns symbol names and their file paths.
-    pub fn context_query(&self, query: &str) -> Result<Vec<SymbolMatch>, GriteError> {
+    pub fn context_query(&self, query: &str) -> Result<Vec<SymbolMatch>, GriteeError> {
         let args = vec!["context", "query", query];
         let response: ContextQueryResponse = self.run_json_direct(&args)?;
         Ok(response
@@ -990,7 +990,7 @@ impl GriteClient {
     /// Show context for a specific file.
     ///
     /// Returns file metadata and extracted symbols.
-    pub fn context_show(&self, path: &str) -> Result<FileContext, GriteError> {
+    pub fn context_show(&self, path: &str) -> Result<FileContext, GriteeError> {
         let args = vec!["context", "show", path];
         let response: ContextShowResponse = self.run_json_direct(&args)?;
         Ok(FileContext {
@@ -1014,17 +1014,17 @@ impl GriteClient {
     /// Get a project context value by key.
     ///
     /// Returns None if the key doesn't exist.
-    pub fn context_project_get(&self, key: &str) -> Result<Option<String>, GriteError> {
+    pub fn context_project_get(&self, key: &str) -> Result<Option<String>, GriteeError> {
         let args = vec!["context", "project", key];
         match self.run_json_direct::<ContextProjectSingleResponse>(&args) {
             Ok(response) => Ok(Some(response.value)),
-            Err(GriteError::NotFound(_)) => Ok(None),
+            Err(GriteeError::NotFound(_)) => Ok(None),
             Err(e) => Err(e),
         }
     }
 
     /// List all project context entries.
-    pub fn context_project_list(&self) -> Result<Vec<ProjectContextEntry>, GriteError> {
+    pub fn context_project_list(&self) -> Result<Vec<ProjectContextEntry>, GriteeError> {
         let args = vec!["context", "project"];
         let response: ContextProjectListResponse = self.run_json_direct(&args)?;
         Ok(response
@@ -1038,7 +1038,7 @@ impl GriteClient {
     }
 
     /// Set a project context value.
-    pub fn context_project_set(&self, key: &str, value: &str) -> Result<(), GriteError> {
+    pub fn context_project_set(&self, key: &str, value: &str) -> Result<(), GriteeError> {
         let args = vec!["context", "set", key, value];
         let _: serde_json::Value = self.run_json_direct(&args)?;
         Ok(())
@@ -1048,17 +1048,17 @@ impl GriteClient {
     // Internal helpers
     // -------------------------------------------------------------------------
 
-    /// Check if grit should run without daemon.
+    /// Check if grite should run without daemon.
     ///
     /// Returns true if the `GRITE_NO_DAEMON` environment variable is set.
     fn should_skip_daemon() -> bool {
         std::env::var("GRITE_NO_DAEMON").is_ok()
     }
 
-    /// Run a grit command and parse JSON output.
+    /// Run a grite command and parse JSON output.
     ///
     /// Retries on db_busy errors up to 3 times with exponential backoff.
-    fn run_json<T: DeserializeOwned>(&self, args: &[&str]) -> Result<T, GriteError> {
+    fn run_json<T: DeserializeOwned>(&self, args: &[&str]) -> Result<T, GriteeError> {
         let mut cmd_args = args.to_vec();
         cmd_args.push("--json");
         if Self::should_skip_daemon() {
@@ -1074,11 +1074,11 @@ impl GriteClient {
                 std::thread::sleep(std::time::Duration::from_millis(100 << attempt));
             }
 
-            let output = Command::new("grit")
+            let output = Command::new("grite")
                 .args(&cmd_args)
                 .current_dir(&self.repo_root)
                 .output()
-                .map_err(|e| GriteError::CommandFailed(format!("failed to run grite: {}", e)))?;
+                .map_err(|e| GriteeError::CommandFailed(format!("failed to run gritee: {}", e)))?;
 
             let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -1095,24 +1095,24 @@ impl GriteClient {
                             || error.message.contains("WouldBlock")
                             || error.message.contains("temporarily unavailable");
                         if is_retryable && attempt < max_retries - 1 {
-                            last_error = Some(GriteError::CommandFailed(error.message));
+                            last_error = Some(GriteeError::CommandFailed(error.message));
                             continue;
                         }
-                        return Err(GriteError::CommandFailed(error.message));
+                        return Err(GriteeError::CommandFailed(error.message));
                     }
                     // Check schema version for compatibility
                     if let Some(version) = env.schema_version {
                         if version != EXPECTED_GRIT_SCHEMA_VERSION {
                             eprintln!(
-                                "Warning: Grit schema version mismatch (expected {}, got {}). \
-                                 Consider updating brat or grite.",
+                                "Warning: Grite schema version mismatch (expected {}, got {}). \
+                                 Consider updating brat or gritee.",
                                 EXPECTED_GRIT_SCHEMA_VERSION, version
                             );
                         }
                     }
                     return env
                         .data
-                        .ok_or_else(|| GriteError::UnexpectedResponse("missing data in response".into()));
+                        .ok_or_else(|| GriteeError::UnexpectedResponse("missing data in response".into()));
                 }
                 Err(e) => {
                     if !output.status.success() {
@@ -1125,25 +1125,25 @@ impl GriteClient {
                             || stderr.contains("WouldBlock")
                             || stderr.contains("temporarily unavailable");
                         if is_retryable && attempt < max_retries - 1 {
-                            last_error = Some(GriteError::CommandFailed(stderr.to_string()));
+                            last_error = Some(GriteeError::CommandFailed(stderr.to_string()));
                             continue;
                         }
-                        return Err(GriteError::CommandFailed(stderr.to_string()));
+                        return Err(GriteeError::CommandFailed(stderr.to_string()));
                     }
-                    return Err(GriteError::ParseError(format!(
-                        "failed to parse grite output: {} - raw: {}",
+                    return Err(GriteeError::ParseError(format!(
+                        "failed to parse gritee output: {} - raw: {}",
                         e, stdout
                     )));
                 }
             }
         }
 
-        Err(last_error.unwrap_or_else(|| GriteError::CommandFailed("max retries exceeded".into())))
+        Err(last_error.unwrap_or_else(|| GriteeError::CommandFailed("max retries exceeded".into())))
     }
 
-    /// Run a grit command and parse the JSON output directly (no envelope wrapper).
+    /// Run a grite command and parse the JSON output directly (no envelope wrapper).
     /// Used for issue commands which now return data directly.
-    fn run_json_direct<T: DeserializeOwned>(&self, args: &[&str]) -> Result<T, GriteError> {
+    fn run_json_direct<T: DeserializeOwned>(&self, args: &[&str]) -> Result<T, GriteeError> {
         let mut cmd_args = args.to_vec();
         cmd_args.push("--json");
         if Self::should_skip_daemon() {
@@ -1159,11 +1159,11 @@ impl GriteClient {
                 std::thread::sleep(std::time::Duration::from_millis(100 << attempt));
             }
 
-            let output = Command::new("grit")
+            let output = Command::new("grite")
                 .args(&cmd_args)
                 .current_dir(&self.repo_root)
                 .output()
-                .map_err(|e| GriteError::CommandFailed(format!("failed to run grite: {}", e)))?;
+                .map_err(|e| GriteeError::CommandFailed(format!("failed to run gritee: {}", e)))?;
 
             let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -1177,18 +1177,18 @@ impl GriteClient {
                     || stderr.contains("WouldBlock")
                     || stderr.contains("temporarily unavailable");
                 if is_retryable && attempt < max_retries - 1 {
-                    last_error = Some(GriteError::CommandFailed(stderr.to_string()));
+                    last_error = Some(GriteeError::CommandFailed(stderr.to_string()));
                     continue;
                 }
-                return Err(GriteError::CommandFailed(stderr.to_string()));
+                return Err(GriteeError::CommandFailed(stderr.to_string()));
             }
 
             // First try to parse as a JSON envelope with { ok, data, error } structure
             let json_value: serde_json::Value = match serde_json::from_str(&stdout) {
                 Ok(v) => v,
                 Err(e) => {
-                    return Err(GriteError::ParseError(format!(
-                        "failed to parse grite JSON output: {} - raw: {}",
+                    return Err(GriteeError::ParseError(format!(
+                        "failed to parse gritee JSON output: {} - raw: {}",
                         e, stdout
                     )));
                 }
@@ -1209,10 +1209,10 @@ impl GriteClient {
                         || error_msg.contains("db_error")
                         || error_msg.contains("could not acquire lock");
                     if is_retryable && attempt < max_retries - 1 {
-                        last_error = Some(GriteError::CommandFailed(error_msg.to_string()));
+                        last_error = Some(GriteeError::CommandFailed(error_msg.to_string()));
                         continue;
                     }
-                    return Err(GriteError::CommandFailed(error_msg.to_string()));
+                    return Err(GriteeError::CommandFailed(error_msg.to_string()));
                 }
 
                 // Extract data from envelope
@@ -1220,8 +1220,8 @@ impl GriteClient {
                     match serde_json::from_value(data.clone()) {
                         Ok(result) => return Ok(result),
                         Err(e) => {
-                            return Err(GriteError::ParseError(format!(
-                                "failed to parse grite data: {} - raw: {}",
+                            return Err(GriteeError::ParseError(format!(
+                                "failed to parse gritee data: {} - raw: {}",
                                 e, data
                             )));
                         }
@@ -1233,26 +1233,26 @@ impl GriteClient {
             match serde_json::from_value(json_value.clone()) {
                 Ok(result) => return Ok(result),
                 Err(e) => {
-                    return Err(GriteError::ParseError(format!(
-                        "failed to parse grite output: {} - raw: {}",
+                    return Err(GriteeError::ParseError(format!(
+                        "failed to parse gritee output: {} - raw: {}",
                         e, stdout
                     )));
                 }
             }
         }
 
-        Err(last_error.unwrap_or_else(|| GriteError::CommandFailed("max retries exceeded".into())))
+        Err(last_error.unwrap_or_else(|| GriteeError::CommandFailed("max retries exceeded".into())))
     }
 }
 
-/// Parse a convoy from a Grit issue summary.
-fn parse_convoy_from_summary(issue: &GriteIssueSummary) -> Result<Convoy, GriteError> {
+/// Parse a convoy from a Grite issue summary.
+fn parse_convoy_from_summary(issue: &GriteeIssueSummary) -> Result<Convoy, GriteeError> {
     // Extract convoy ID from labels
     let convoy_id = issue
         .labels
         .iter()
         .find_map(|label| label.strip_prefix("convoy:"))
-        .ok_or_else(|| GriteError::ParseError("missing convoy: label".into()))?
+        .ok_or_else(|| GriteeError::ParseError("missing convoy: label".into()))?
         .to_string();
 
     // Extract status from labels
@@ -1264,21 +1264,21 @@ fn parse_convoy_from_summary(issue: &GriteIssueSummary) -> Result<Convoy, GriteE
 
     Ok(Convoy {
         convoy_id,
-        grite_issue_id: issue.issue_id.clone(),
+        gritee_issue_id: issue.issue_id.clone(),
         title: issue.title.clone(),
         body: String::new(), // Summary doesn't include body
         status,
     })
 }
 
-/// Parse a task from a Grit issue summary.
-fn parse_task_from_summary(issue: &GriteIssueSummary) -> Result<Task, GriteError> {
+/// Parse a task from a Grite issue summary.
+fn parse_task_from_summary(issue: &GriteeIssueSummary) -> Result<Task, GriteeError> {
     // Extract task ID from labels
     let task_id = issue
         .labels
         .iter()
         .find_map(|label| label.strip_prefix("task:"))
-        .ok_or_else(|| GriteError::ParseError("missing task: label".into()))?
+        .ok_or_else(|| GriteeError::ParseError("missing task: label".into()))?
         .to_string();
 
     // Extract convoy ID from labels
@@ -1286,7 +1286,7 @@ fn parse_task_from_summary(issue: &GriteIssueSummary) -> Result<Task, GriteError
         .labels
         .iter()
         .find_map(|label| label.strip_prefix("convoy:"))
-        .ok_or_else(|| GriteError::ParseError("missing convoy: label".into()))?
+        .ok_or_else(|| GriteeError::ParseError("missing convoy: label".into()))?
         .to_string();
 
     // Extract status from labels
@@ -1298,7 +1298,7 @@ fn parse_task_from_summary(issue: &GriteIssueSummary) -> Result<Task, GriteError
 
     Ok(Task {
         task_id,
-        grite_issue_id: issue.issue_id.clone(),
+        gritee_issue_id: issue.issue_id.clone(),
         convoy_id,
         title: issue.title.clone(),
         body: String::new(), // Summary doesn't include body
@@ -1308,15 +1308,15 @@ fn parse_task_from_summary(issue: &GriteIssueSummary) -> Result<Task, GriteError
 
 /// Parse a task from a summary and full issue (includes body).
 fn parse_task_from_full_issue(
-    summary: &GriteIssueSummary,
-    full: &GriteIssue,
-) -> Result<Task, GriteError> {
+    summary: &GriteeIssueSummary,
+    full: &GriteeIssue,
+) -> Result<Task, GriteeError> {
     // Extract task ID from labels
     let task_id = summary
         .labels
         .iter()
         .find_map(|label| label.strip_prefix("task:"))
-        .ok_or_else(|| GriteError::ParseError("missing task: label".into()))?
+        .ok_or_else(|| GriteeError::ParseError("missing task: label".into()))?
         .to_string();
 
     // Extract convoy ID from labels
@@ -1324,7 +1324,7 @@ fn parse_task_from_full_issue(
         .labels
         .iter()
         .find_map(|label| label.strip_prefix("convoy:"))
-        .ok_or_else(|| GriteError::ParseError("missing convoy: label".into()))?
+        .ok_or_else(|| GriteeError::ParseError("missing convoy: label".into()))?
         .to_string();
 
     // Extract status from labels
@@ -1336,7 +1336,7 @@ fn parse_task_from_full_issue(
 
     Ok(Task {
         task_id,
-        grite_issue_id: summary.issue_id.clone(),
+        gritee_issue_id: summary.issue_id.clone(),
         convoy_id,
         title: full.title.clone(),
         body: full.body.clone(),
@@ -1477,10 +1477,10 @@ struct SessionCommentData {
     last_output_ref: Option<String>,
 }
 
-/// Parse the latest session from a Grit issue (body + comments).
+/// Parse the latest session from a Grite issue (body + comments).
 fn parse_latest_session_from_issue(
-    issue: &GriteIssue,
-    summary: &GriteIssueSummary,
+    issue: &GriteeIssue,
+    summary: &GriteeIssueSummary,
 ) -> Option<Session> {
     // Extract task_id from labels
     let task_id = summary
@@ -1490,13 +1490,13 @@ fn parse_latest_session_from_issue(
         .to_string();
 
     // Try to parse session from body first, then look for most recent in comments
-    // For now, just parse from body (comments would need Grite CLI support)
+    // For now, just parse from body (comments would need Gritee CLI support)
     let data = parse_session_comment(&issue.body)?;
 
     Some(Session {
         session_id: data.session_id,
         task_id,
-        grite_issue_id: issue.issue_id.clone(),
+        gritee_issue_id: issue.issue_id.clone(),
         role: data.role,
         session_type: data.session_type,
         engine: data.engine,
@@ -1511,10 +1511,10 @@ fn parse_latest_session_from_issue(
     })
 }
 
-/// Parse a specific session by ID from a Grit issue.
+/// Parse a specific session by ID from a Grite issue.
 fn parse_session_by_id_from_issue(
-    issue: &GriteIssue,
-    summary: &GriteIssueSummary,
+    issue: &GriteeIssue,
+    summary: &GriteeIssueSummary,
     session_id: &str,
 ) -> Option<Session> {
     // Extract task_id from labels
@@ -1535,7 +1535,7 @@ fn parse_session_by_id_from_issue(
     Some(Session {
         session_id: data.session_id,
         task_id,
-        grite_issue_id: issue.issue_id.clone(),
+        gritee_issue_id: issue.issue_id.clone(),
         role: data.role,
         session_type: data.session_type,
         engine: data.engine,
@@ -1559,11 +1559,11 @@ mod tests {
         let session = Session {
             session_id: "s-20250117-a2f9".to_string(),
             task_id: "t-20250117-b3c4".to_string(),
-            grite_issue_id: "issue-123".to_string(),
+            gritee_issue_id: "issue-123".to_string(),
             role: SessionRole::Witness,
             session_type: SessionType::Polecat,
             engine: "shell".to_string(),
-            worktree: ".grite/worktrees/s-20250117-a2f9".to_string(),
+            worktree: ".gritee/worktrees/s-20250117-a2f9".to_string(),
             pid: Some(12345),
             status: SessionStatus::Running,
             started_ts: 1700000000000,
@@ -1595,7 +1595,7 @@ mod tests {
         let session = Session {
             session_id: "s-20250117-dead".to_string(),
             task_id: "t-20250117-beef".to_string(),
-            grite_issue_id: "issue-456".to_string(),
+            gritee_issue_id: "issue-456".to_string(),
             role: SessionRole::User,
             session_type: SessionType::Crew,
             engine: "claude".to_string(),

@@ -1,6 +1,6 @@
 //! Events emitted by the session monitor.
 
-use libbrat_grite::SessionStatus;
+use libbrat_gritee::SessionStatus;
 
 /// Events emitted by the session monitor for caller observation.
 ///
@@ -39,7 +39,7 @@ pub enum MonitorEvent {
         consecutive_failures: u32,
     },
 
-    /// Heartbeat updated in Grit.
+    /// Heartbeat updated in Grite.
     Heartbeat {
         /// Session identifier.
         session_id: String,

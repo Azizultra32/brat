@@ -9,7 +9,7 @@ use crate::context::BratContext;
 use crate::error::BratError;
 use crate::output::{output_success, print_human};
 
-/// Lock info from Grite.
+/// Lock info from Gritee.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LockInfo {
     /// Resource being locked.
@@ -51,23 +51,23 @@ pub struct LockStatusOutput {
     pub total_conflicts: usize,
 }
 
-/// Grit lock status JSON response envelope.
+/// Grite lock status JSON response envelope.
 #[derive(Debug, Deserialize)]
-struct GritLockResponse {
+struct GriteLockResponse {
     #[serde(default)]
     ok: bool,
-    data: Option<GritLockData>,
-    error: Option<GritLockError>,
+    data: Option<GriteLockData>,
+    error: Option<GriteLockError>,
 }
 
 #[derive(Debug, Deserialize)]
-struct GritLockData {
+struct GriteLockData {
     #[serde(default)]
-    locks: Vec<GritLockEntry>,
+    locks: Vec<GriteLockEntry>,
 }
 
 #[derive(Debug, Deserialize)]
-struct GritLockEntry {
+struct GriteLockEntry {
     resource: String,
     owner: String,
     #[serde(default)]
@@ -75,7 +75,7 @@ struct GritLockEntry {
 }
 
 #[derive(Debug, Deserialize)]
-struct GritLockError {
+struct GriteLockError {
     message: String,
 }
 
@@ -89,27 +89,27 @@ pub fn run(cli: &Cli, cmd: &LockCommand) -> Result<(), BratError> {
 /// Run the lock status command.
 fn run_status(cli: &Cli, args: &LockStatusArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
-    // Shell out to grite lock status --json
-    let grite_output = Command::new("grite")
+    // Shell out to gritee lock status --json
+    let gritee_output = Command::new("gritee")
         .args(["lock", "status", "--json"])
         .current_dir(&ctx.repo_root)
         .output();
 
     let mut output = LockStatusOutput::default();
 
-    match grite_output {
+    match gritee_output {
         Ok(result) if result.status.success() => {
             let stdout = String::from_utf8_lossy(&result.stdout);
 
             // Try to parse the JSON response
-            if let Ok(response) = serde_json::from_str::<GritLockResponse>(&stdout) {
+            if let Ok(response) = serde_json::from_str::<GriteLockResponse>(&stdout) {
                 if let Some(data) = response.data {
                     for entry in data.locks {
                         let ttl_remaining_ms = entry.expires_ts - now_ms;
@@ -132,10 +132,10 @@ fn run_status(cli: &Cli, args: &LockStatusArgs) -> Result<(), BratError> {
             }
         }
         Ok(result) => {
-            // Command failed, likely grite doesn.t support lock status yet
+            // Command failed, likely gritee doesn.t support lock status yet
             let stderr = String::from_utf8_lossy(&result.stderr);
             if !cli.quiet {
-                eprintln!("Note: grite lock status not available: {}", stderr.trim());
+                eprintln!("Note: gritee lock status not available: {}", stderr.trim());
             }
         }
         Err(e) => {

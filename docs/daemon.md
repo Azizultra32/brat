@@ -1,10 +1,10 @@
 # Daemons
 
-Brat uses two optional daemons: `gritd` (Grit substrate) and `bratd` (Brat harness).
+Brat uses two optional daemons: `grited` (Grite substrate) and `bratd` (Brat harness).
 
-## Grit Daemon (gritd)
+## Grite Daemon (grited)
 
-The Grit daemon is optional and exists only to improve performance. **Correctness never depends on it.**
+The Grite daemon is optional and exists only to improve performance. **Correctness never depends on it.**
 
 ### Responsibilities
 
@@ -16,17 +16,17 @@ The Grit daemon is optional and exists only to improve performance. **Correctnes
 
 - Never rewrites refs or force-pushes
 - Never writes to the working tree
-- **No background sync** (sync is always explicit via `grit sync`)
+- **No background sync** (sync is always explicit via `grite sync`)
 
 ### Auto-Spawn
 
-Grit CLI auto-spawns `gritd` on first command:
+Grite CLI auto-spawns `grited` on first command:
 
 - Default idle timeout: 5 minutes
 - Use `--no-daemon` to force local execution
-- Use `grit daemon start --idle-timeout <secs>` for custom timeout
+- Use `grite daemon start --idle-timeout <secs>` for custom timeout
 
-See [Grit daemon documentation](https://github.com/neul-labs/grit/blob/main/docs/daemon.md) for details.
+See [Grite daemon documentation](https://github.com/neul-labs/grite/blob/main/docs/daemon.md) for details.
 
 ---
 
@@ -99,13 +99,13 @@ The daemon stores state in `~/.brat/`:
 |                 Brat Daemon (bratd)                       |
 |   HTTP API | Multi-repo | Session tracking | Mayor        |
 +----------------------------------------------------------+
-|                 Grit CLI (grit)                           |
+|                 Grite CLI (grite)                           |
 +----------------------------------------------------------+
-|              Grit Daemon (gritd) [optional]               |
+|              Grite Daemon (grited) [optional]               |
 |         Warm cache | Concurrent access | IPC              |
 +----------------------------------------------------------+
 |                    Git Repository                         |
-|         refs/grit/wal | refs/grit/locks | sled           |
+|         refs/grite/wal | refs/grite/locks | sled           |
 +----------------------------------------------------------+
 ```
 
@@ -130,13 +130,13 @@ Both daemons are optional. All commands work without them (standalone mode).
 | bratd can't start | CLI commands still work (standalone mode) |
 | Auto-start fails | Warning shown, command continues |
 | bratd crashes | Restart with `brat daemon start` |
-| gritd crashes | Lock expires, CLI takes over automatically |
+| grited crashes | Lock expires, CLI takes over automatically |
 
 ---
 
-## Interaction with Grit
+## Interaction with Grite
 
-- Bratd uses Grit as the source of truth for all state
-- All convoy/task/session state stored in Grit issues and comments
-- If `gritd` is running, bratd benefits from its warm cache
-- Bratd works without `gritd` by using Grit CLI directly
+- Bratd uses Grite as the source of truth for all state
+- All convoy/task/session state stored in Grite issues and comments
+- If `grited` is running, bratd benefits from its warm cache
+- Bratd works without `grited` by using Grite CLI directly

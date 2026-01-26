@@ -1,4 +1,4 @@
-use libbrat_grite::{DependencyType, TaskStatus};
+use libbrat_gritee::{DependencyType, TaskStatus};
 use serde::Serialize;
 
 use crate::cli::{
@@ -15,8 +15,8 @@ pub struct TaskCreateOutput {
     /// Brat task ID.
     pub task_id: String,
 
-    /// Grit's internal issue ID.
-    pub grite_issue_id: String,
+    /// Grite's internal issue ID.
+    pub gritee_issue_id: String,
 
     /// Parent convoy ID.
     pub convoy_id: String,
@@ -126,16 +126,16 @@ fn run_dep(cli: &Cli, cmd: &TaskDepCommand) -> Result<(), BratError> {
 fn run_create(cli: &Cli, args: &TaskCreateArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
 
-    // Require both brat and grite to be initialized
+    // Require both brat and gritee to be initialized
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
     let task = client.task_create(&args.convoy, &args.title, args.body.as_deref())?;
 
     let output = TaskCreateOutput {
         task_id: task.task_id.clone(),
-        grite_issue_id: task.grite_issue_id,
+        gritee_issue_id: task.gritee_issue_id,
         convoy_id: task.convoy_id,
         title: task.title,
         status: format!("{:?}", task.status).to_lowercase(),
@@ -153,14 +153,14 @@ fn run_create(cli: &Cli, args: &TaskCreateArgs) -> Result<(), BratError> {
 fn run_update(cli: &Cli, args: &TaskUpdateArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
 
-    // Require both brat and grite to be initialized
+    // Require both brat and gritee to be initialized
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
     // Parse the status argument
     let new_status = parse_task_status(&args.status)?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
     client.task_update_status_with_options(&args.task_id, new_status, args.force)?;
 
     let output = TaskUpdateOutput {
@@ -190,7 +190,7 @@ fn parse_task_status(s: &str) -> Result<TaskStatus, BratError> {
         "needs-review" | "needs_review" | "needsreview" => Ok(TaskStatus::NeedsReview),
         "merged" => Ok(TaskStatus::Merged),
         "dropped" => Ok(TaskStatus::Dropped),
-        _ => Err(BratError::GriteCommandFailed(format!(
+        _ => Err(BratError::GriteeCommandFailed(format!(
             "invalid status '{}': expected one of queued, running, blocked, needs-review, merged, dropped",
             s
         ))),
@@ -200,7 +200,7 @@ fn parse_task_status(s: &str) -> Result<TaskStatus, BratError> {
 /// Parse a dependency type string.
 fn parse_dep_type(s: &str) -> Result<DependencyType, BratError> {
     DependencyType::from_str(s).ok_or_else(|| {
-        BratError::GriteCommandFailed(format!(
+        BratError::GriteeCommandFailed(format!(
             "invalid dependency type '{}': expected one of blocks, depends_on, related_to",
             s
         ))
@@ -211,16 +211,16 @@ fn parse_dep_type(s: &str) -> Result<DependencyType, BratError> {
 fn run_dep_add(cli: &Cli, args: &TaskDepAddArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
     let dep_type = parse_dep_type(&args.dep_type)?;
 
-    // Get the grite issue IDs for the task IDs
-    let client = ctx.grite_client();
+    // Get the gritee issue IDs for the task IDs
+    let client = ctx.gritee_client();
     let task = client.task_get(&args.task_id)?;
     let target_task = client.task_get(&args.target)?;
 
-    client.task_dep_add(&task.grite_issue_id, &target_task.grite_issue_id, dep_type)?;
+    client.task_dep_add(&task.gritee_issue_id, &target_task.gritee_issue_id, dep_type)?;
 
     let output = TaskDepModifyOutput {
         task_id: args.task_id.clone(),
@@ -247,16 +247,16 @@ fn run_dep_add(cli: &Cli, args: &TaskDepAddArgs) -> Result<(), BratError> {
 fn run_dep_remove(cli: &Cli, args: &TaskDepRemoveArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
     let dep_type = parse_dep_type(&args.dep_type)?;
 
-    // Get the grite issue IDs for the task IDs
-    let client = ctx.grite_client();
+    // Get the gritee issue IDs for the task IDs
+    let client = ctx.gritee_client();
     let task = client.task_get(&args.task_id)?;
     let target_task = client.task_get(&args.target)?;
 
-    client.task_dep_remove(&task.grite_issue_id, &target_task.grite_issue_id, dep_type)?;
+    client.task_dep_remove(&task.gritee_issue_id, &target_task.gritee_issue_id, dep_type)?;
 
     let output = TaskDepModifyOutput {
         task_id: args.task_id.clone(),
@@ -283,12 +283,12 @@ fn run_dep_remove(cli: &Cli, args: &TaskDepRemoveArgs) -> Result<(), BratError> 
 fn run_dep_list(cli: &Cli, args: &TaskDepListArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
     let task = client.task_get(&args.task_id)?;
 
-    let deps = client.task_dep_list(&task.grite_issue_id, args.reverse)?;
+    let deps = client.task_dep_list(&task.gritee_issue_id, args.reverse)?;
 
     let direction = if args.reverse {
         "dependents"
@@ -331,9 +331,9 @@ fn run_dep_list(cli: &Cli, args: &TaskDepListArgs) -> Result<(), BratError> {
 fn run_dep_topo(cli: &Cli, args: &TaskDepTopoArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
 
     // Build label filter for convoy if specified
     let label = args.convoy.as_ref().map(|c| format!("convoy:{}", c));

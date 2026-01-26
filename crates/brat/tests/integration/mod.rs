@@ -10,7 +10,7 @@
 //! - Test 6: Doctor monotonic rebuild (doctor_rebuild)
 //!
 //! Skipped:
-//! - Test 2: Union merge of WAL (Grit-level test, covered by Grit's own tests)
+//! - Test 2: Union merge of WAL (Grite-level test, covered by Grite's own tests)
 //! - Test 4: No silent death (requires engine session lifecycle, tested in unit tests)
 
 pub mod helpers;

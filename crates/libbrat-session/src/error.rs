@@ -1,7 +1,7 @@
 //! Error types for session monitor operations.
 
 use libbrat_engine::EngineError;
-use libbrat_grite::GriteError;
+use libbrat_gritee::GriteeError;
 use libbrat_worktree::WorktreeError;
 use thiserror::Error;
 
@@ -12,9 +12,9 @@ pub enum SessionMonitorError {
     #[error("engine error: {0}")]
     Engine(#[from] EngineError),
 
-    /// Grit operation failed.
-    #[error("grite error: {0}")]
-    Grit(#[from] GriteError),
+    /// Grite operation failed.
+    #[error("gritee error: {0}")]
+    Grite(#[from] GriteeError),
 
     /// Worktree operation failed.
     #[error("worktree error: {0}")]

@@ -1,21 +1,21 @@
 # Gastown issue to design mapping
 
-This table maps recurring Gastown pain points to the Grit-backed Brat design and the remaining harness work.
+This table maps recurring Gastown pain points to the Grite-backed Brat design and the remaining harness work.
 
 ## Issue to design table
 
-| Pain point | Grit substrate response | Harness work needed |
+| Pain point | Grite substrate response | Harness work needed |
 | --- | --- | --- |
-| Dirty working trees and phantom diffs | No tracked metadata; WAL in `refs/grit/wal` | Ensure harness never writes metadata into worktrees; export only on demand |
+| Dirty working trees and phantom diffs | No tracked metadata; WAL in `refs/grite/wal` | Ensure harness never writes metadata into worktrees; export only on demand |
 | Destructive or scary repair (doctor) | `brat doctor` is monotonic; rebuild projections only | Surface `doctor` and rebuild actions in the control room with clear prompts |
-| Daemon required for correctness | Brat wraps a correct substrate; `gritd` is optional | Make harness tolerate daemon absence and fall back to CLI-only flows |
-| Commands that hang (`brat feed`) | Grit CLI defaults to non-blocking; `--json` always available | Align harness UI and CLI to the same non-blocking contract |
+| Daemon required for correctness | Brat wraps a correct substrate; `grited` is optional | Make harness tolerate daemon absence and fall back to CLI-only flows |
+| Commands that hang (`brat feed`) | Grite CLI defaults to non-blocking; `--json` always available | Align harness UI and CLI to the same non-blocking contract |
 | Orphaned sessions and stuck workers | Persistent actors + WAL event log | Implement session state machine + reconciliation on startup |
-| Silent failures with no logs | Event log is durable; comments/labels can store exit data | Always post exit code + last logs to Grit comments on failure |
+| Silent failures with no logs | Event log is durable; comments/labels can store exit data | Always post exit code + last logs to Grite comments on failure |
 | Divergence / branch-topology heuristics | Merge by event union; deterministic projections | Ensure harness never uses branch state as coordination state |
-| Config/flag drift | Grit has explicit config + actor selection | Add harness config schema + validation; show in control room |
-| Engine portability issues | Grit is engine-agnostic | Implement engine trait adapters (Claude/Codex/OpenCode) |
-| Fragile Beads/JQ tooling | Grit WAL is self-contained | Remove jq dependency; rely on structured events and CLI output |
+| Config/flag drift | Grite has explicit config + actor selection | Add harness config schema + validation; show in control room |
+| Engine portability issues | Grite is engine-agnostic | Implement engine trait adapters (Claude/Codex/OpenCode) |
+| Fragile Beads/JQ tooling | Grite WAL is self-contained | Remove jq dependency; rely on structured events and CLI output |
 
 ## Detailed harness implementation work
 
@@ -32,7 +32,7 @@ See `docs/state-machine.md` for the full specification. Summary:
 On harness startup:
 
 - List active sessions from the engine adapter
-- List expected sessions from Grit comments/labels
+- List expected sessions from Grite comments/labels
 - Reconcile differences:
   - Adopt orphaned sessions and post recovery notes
   - Mark missing sessions as exited with last known info
@@ -46,7 +46,7 @@ Every session must emit:
 - Last N lines (or a hash + pointer)
 - Timestamps (spawned, last heartbeat, exited)
 
-All of the above are written as Grit comments, and summarized into labels for queryability.
+All of the above are written as Grite comments, and summarized into labels for queryability.
 
 ### 4) Non-blocking UX contract
 
@@ -66,11 +66,11 @@ Implement a strict engine trait with timeouts and structured error reporting:
 
 - One worktree per agent
 - Ensure `git status` stays clean for metadata
-- Map worktrees to actors and post their paths in Grit comments
+- Map worktrees to actors and post their paths in Grite comments
 
 ### 7) Merge/refinery pipeline
 
-- Use Grit issues + labels to track merge state
+- Use Grite issues + labels to track merge state
 - Make merge attempts explicit in comments
 - Define merge queue policy and retry rules
 
@@ -87,7 +87,7 @@ Implement a strict engine trait with timeouts and structured error reporting:
   - session health
   - merge queue
   - locks
-- Control room commands are wrappers around Grit queries and harness actions
+- Control room commands are wrappers around Grite queries and harness actions
 - Tmux naming convention:
   - Session: `brat`
   - Windows: `mayor`, `witness`, `refinery`, `deacon`, `sessions`
@@ -98,4 +98,4 @@ Add an end-to-end suite that runs:
 
 - convoy-like task bundle -> spawn swarm -> work -> merge
 - concurrent agents -> event union -> deterministic projection
-- `gritd` down -> CLI still correct
+- `grited` down -> CLI still correct

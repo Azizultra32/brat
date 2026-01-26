@@ -42,11 +42,11 @@ pub struct InitOutput {
     /// Path to the config file (if created).
     pub config_path: Option<String>,
 
-    /// Whether grite was initialized.
-    pub grite_initialized: bool,
+    /// Whether gritee was initialized.
+    pub gritee_initialized: bool,
 
-    /// Actor ID from grite (if available).
-    pub grite_actor_id: Option<String>,
+    /// Actor ID from gritee (if available).
+    pub gritee_actor_id: Option<String>,
 
     /// Action taken for AGENTS.md (created, updated, skipped, disabled).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -62,8 +62,8 @@ pub fn run(cli: &Cli, args: &InitArgs) -> Result<(), BratError> {
         return Err(BratError::AlreadyInitialized);
     }
 
-    // Initialize grite if needed (pass --no-agents-md if set)
-    let (grite_initialized, grite_actor_id) = init_grite(&ctx, args.no_agents_md)?;
+    // Initialize gritee if needed (pass --no-agents-md if set)
+    let (gritee_initialized, gritee_actor_id) = init_gritee(&ctx, args.no_agents_md)?;
 
     // Handle AGENTS.md (add brat section)
     let agents_md_action = if args.no_agents_md {
@@ -88,16 +88,16 @@ pub fn run(cli: &Cli, args: &InitArgs) -> Result<(), BratError> {
         repo_root: ctx.repo_root.display().to_string(),
         brat_dir: ctx.brat_dir.display().to_string(),
         config_path,
-        grite_initialized,
-        grite_actor_id,
+        gritee_initialized,
+        gritee_actor_id,
         agents_md_action: Some(agents_md_action.as_str().to_string()),
     };
 
     if !cli.json {
         print_human(cli, &format!("Initialized brat in {}", ctx.repo_root.display()));
-        if grite_initialized {
-            if let Some(ref actor_id) = output.grite_actor_id {
-                print_human(cli, &format!("Grit actor: {}", actor_id));
+        if gritee_initialized {
+            if let Some(ref actor_id) = output.gritee_actor_id {
+                print_human(cli, &format!("Grite actor: {}", actor_id));
             }
         }
         // Print AGENTS.md status
@@ -119,20 +119,20 @@ pub fn run(cli: &Cli, args: &InitArgs) -> Result<(), BratError> {
     Ok(())
 }
 
-/// Initialize grite in the repository.
+/// Initialize gritee in the repository.
 ///
-/// Calls `grite init` as a subprocess and parses the output.
-fn init_grite(ctx: &BratContext, no_agents_md: bool) -> Result<(bool, Option<String>), BratError> {
-    // Check if grit is already initialized by looking for .git/grite/
-    let grite_dir = ctx.git_dir.join("grite");
-    if grite_dir.exists() {
+/// Calls `gritee init` as a subprocess and parses the output.
+fn init_gritee(ctx: &BratContext, no_agents_md: bool) -> Result<(bool, Option<String>), BratError> {
+    // Check if grite is already initialized by looking for .git/gritee/
+    let gritee_dir = ctx.git_dir.join("gritee");
+    if gritee_dir.exists() {
         // Already initialized, try to get the actor ID
-        let actor_id = get_grite_actor_id(ctx)?;
+        let actor_id = get_gritee_actor_id(ctx)?;
         return Ok((false, actor_id));
     }
 
-    // Run grite init
-    let mut cmd = Command::new("grite");
+    // Run gritee init
+    let mut cmd = Command::new("gritee");
     cmd.arg("init").arg("--json");
     if no_agents_md {
         cmd.arg("--no-agents-md");
@@ -141,38 +141,38 @@ fn init_grite(ctx: &BratContext, no_agents_md: bool) -> Result<(bool, Option<Str
 
     let output = cmd
         .output()
-        .map_err(|e| BratError::GriteInitFailed(format!("failed to run grite: {}", e)))?;
+        .map_err(|e| BratError::GriteeInitFailed(format!("failed to run gritee: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(BratError::GriteInitFailed(stderr.to_string()));
+        return Err(BratError::GriteeInitFailed(stderr.to_string()));
     }
 
     // Parse the JSON output to get the actor ID
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let actor_id = parse_grite_init_output(&stdout);
+    let actor_id = parse_gritee_init_output(&stdout);
 
     Ok((true, actor_id))
 }
 
-/// Get the current grite actor ID.
-fn get_grite_actor_id(ctx: &BratContext) -> Result<Option<String>, BratError> {
-    let output = Command::new("grite")
+/// Get the current gritee actor ID.
+fn get_gritee_actor_id(ctx: &BratContext) -> Result<Option<String>, BratError> {
+    let output = Command::new("gritee")
         .args(["actor", "current", "--json"])
         .current_dir(&ctx.repo_root)
         .output()
-        .map_err(|e| BratError::GriteCommandFailed(format!("failed to run grite: {}", e)))?;
+        .map_err(|e| BratError::GriteeCommandFailed(format!("failed to run gritee: {}", e)))?;
 
     if !output.status.success() {
         return Ok(None);
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(parse_grite_actor_output(&stdout))
+    Ok(parse_gritee_actor_output(&stdout))
 }
 
-/// Parse grite init JSON output to extract actor_id.
-fn parse_grite_init_output(output: &str) -> Option<String> {
+/// Parse gritee init JSON output to extract actor_id.
+fn parse_gritee_init_output(output: &str) -> Option<String> {
     // Try to parse as JSON and extract actor_id
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(output) {
         if let Some(data) = json.get("data") {
@@ -184,8 +184,8 @@ fn parse_grite_init_output(output: &str) -> Option<String> {
     None
 }
 
-/// Parse grite actor current JSON output to extract actor_id.
-fn parse_grite_actor_output(output: &str) -> Option<String> {
+/// Parse gritee actor current JSON output to extract actor_id.
+fn parse_gritee_actor_output(output: &str) -> Option<String> {
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(output) {
         if let Some(data) = json.get("data") {
             if let Some(actor_id) = data.get("actor_id") {

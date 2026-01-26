@@ -1,13 +1,13 @@
 # Harness state machine
 
-This document specifies the lifecycle state machines used by the Brat harness and how they are persisted in Grit.
+This document specifies the lifecycle state machines used by the Brat harness and how they are persisted in Grite.
 
 ## Goals
 
 - Explicit lifecycle states for roles and sessions
 - Idempotent transitions (safe to replay)
 - Recoverable after crash or restart
-- Observable in the control room via Grit queries
+- Observable in the control room via Grite queries
 
 ## Session lifecycle
 
@@ -32,9 +32,9 @@ This document specifies the lifecycle state machines used by the Brat harness an
 - `running -> exit`: failure, timeout, or user stop
 - `handoff -> exit`: task closed or session stopped
 
-### Persistence in Grit
+### Persistence in Grite
 
-- Each transition is recorded as a Grit comment on the task issue
+- Each transition is recorded as a Grite comment on the task issue
 - Labels are updated to reflect the current state
 - Exit transition includes exit code, reason, last output hash or snippet
 
@@ -54,7 +54,7 @@ This document specifies the lifecycle state machines used by the Brat harness an
 - `degraded -> recovering`: reconciliation begins
 - `recovering -> active`: state is consistent again
 
-### Persistence in Grit
+### Persistence in Grite
 
 - Role state transitions are recorded in a dedicated issue or log thread
 - Health summaries are posted at bounded intervals
@@ -64,7 +64,7 @@ This document specifies the lifecycle state machines used by the Brat harness an
 On harness startup:
 
 1. List active engine sessions for each role
-2. Read expected sessions from Grit comments/labels
+2. Read expected sessions from Grite comments/labels
 3. Reconcile:
    - Adopt orphaned sessions and post a recovery note
    - Mark missing sessions as `exit` with best-known info

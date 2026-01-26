@@ -60,7 +60,7 @@ The Witness turns planned work into running sessions. It:
 - Creates isolated worktrees
 - Spawns AI engine sessions
 - Monitors heartbeats and progress
-- Posts lifecycle updates to Grit
+- Posts lifecycle updates to Grite
 
 ### Usage
 

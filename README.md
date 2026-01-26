@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
 
-Brat is a multi-agent harness that coordinates AI coding tools (Claude Code, Aider, Codex, and more) working in parallel on your codebase. Built on [Grite](https://github.com/neul-labs/grite), an append-only event log, Brat ensures that even if agents crash, your coordination state is always recoverable and auditable.
+Brat is a multi-agent harness that coordinates AI coding tools (Claude Code, Aider, Codex, and more) working in parallel on your codebase. Built on [Gritee](https://github.com/neul-labs/grite), an append-only event log, Brat ensures that even if agents crash, your coordination state is always recoverable and auditable.
 
 ---
 
@@ -104,7 +104,7 @@ curl -fsSL https://raw.githubusercontent.com/neul-labs/brat/main/install.sh | ba
 cargo install --path crates/brat
 ```
 
-**Prerequisite:** Install [Grite](https://github.com/neul-labs/grite) first:
+**Prerequisite:** Install [Gritee](https://github.com/neul-labs/grite) first:
 ```bash
 cargo install --git https://github.com/neul-labs/grite grite
 ```
@@ -113,7 +113,7 @@ cargo install --git https://github.com/neul-labs/grite grite
 
 ```bash
 cd your-project
-grite init     # Initialize Grite substrate
+grite init     # Initialize Gritee substrate
 brat init      # Initialize Brat harness
 ```
 
@@ -208,7 +208,7 @@ See [docs/bratd.md](docs/bratd.md) for full documentation.
 | Problem | How Brat Fixes It |
 |---------|-------------------|
 | **Dirty working trees** | Metadata lives in `refs/grite/*`, never in tracked files |
-| **Silent failures** | All state changes recorded as Grit events, fully observable |
+| **Silent failures** | All state changes recorded as Grite events, fully observable |
 | **Crash recovery** | Append-only log enables deterministic rebuild from any point |
 | **Daemon dependency** | CLI commands are complete transactions; daemons are optional |
 | **Merge chaos** | Refinery manages queue with configurable policy (rebase/squash/merge) |
@@ -242,7 +242,7 @@ We believe in honest positioning:
 │  │ Mayor  │ │ Witness │ │ Refinery │ │ Deacon │            │
 │  └────────┘ └─────────┘ └──────────┘ └────────┘            │
 ├─────────────────────────────────────────────────────────────┤
-│                  Grite Substrate Layer                       │
+│                  Gritee Substrate Layer                       │
 │  Events • Issues • Labels • Comments • Locks • Sync         │
 ├─────────────────────────────────────────────────────────────┤
 │                    AI Engine Adapters                        │
@@ -330,5 +330,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 <p align="center">
-  <b>Brat</b> is built on <a href="https://github.com/neul-labs/grite">Grite</a> - the append-only substrate for deterministic collaboration.
+  <b>Brat</b> is built on <a href="https://github.com/neul-labs/grite">Gritee</a> - the append-only substrate for deterministic collaboration.
 </p>

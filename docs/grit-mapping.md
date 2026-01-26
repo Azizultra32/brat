@@ -1,14 +1,14 @@
-# Brat to Grit mapping
+# Brat to Grite mapping
 
-This doc describes how the harness maps its concepts onto Grit issues, comments, labels, and locks. It is an initial mapping and can evolve.
+This doc describes how the harness maps its concepts onto Grite issues, comments, labels, and locks. It is an initial mapping and can evolve.
 
 ## Core entities
 
 - Town (repo): `brat init` enables the repo and creates the WAL + local state.
-- Convoy (bundle of tasks): represented as a Grit issue with label `type:convoy`.
-- Task: represented as a Grit issue with label `type:task`.
+- Convoy (bundle of tasks): represented as a Grite issue with label `type:convoy`.
+- Task: represented as a Grite issue with label `type:task`.
 - Task membership: task issues include label `convoy:<id>` (or a `LinkAdded` to the convoy issue).
-- Session: represented as a Grit comment on the task issue (spawn, heartbeat, exit).
+- Session: represented as a Grite comment on the task issue (spawn, heartbeat, exit).
   - Session comments follow `docs/session-event-schema.md`.
 
 ## Labels and state conventions
@@ -31,7 +31,7 @@ Canonical labels are defined in `docs/label-glossary.md`. ID formats are defined
   - `status:merged`
   - `status:dropped`
 - Ownership:
-  - `assignee:<actor_id>` (or Grit assignees when supported)
+  - `assignee:<actor_id>` (or Grite assignees when supported)
 - Engine:
   - `engine:<name>` for engine type (codex, claude, opencode)
 - Session:
@@ -64,7 +64,7 @@ Guidelines:
 - Add `urgency:low|med|high` to signal priority.
 - Add `ack:<actor_id>` when the recipient confirms receipt.
 
-## Roles to Grit actions
+## Roles to Grite actions
 
 - Mayor
   - Creates convoy issue and task issues
@@ -86,7 +86,7 @@ Guidelines:
 
 ## Locks
 
-Locks are stored in `refs/grit/locks/*` and used for coordination.
+Locks are stored in `refs/grite/locks/*` and used for coordination.
 
 - Path lock: `path:<path>`
 - Task lock: `issue:<id>`
@@ -97,7 +97,7 @@ The harness should acquire a lock before risky edits and release it on completio
 ## Worktrees
 
 - Each agent uses its own worktree and actor data dir
-- All coordination state stays in `refs/grit/*` and `.git/grit/`
+- All coordination state stays in `refs/grite/*` and `.git/grite/`
 
 ## Optional enhancements
 

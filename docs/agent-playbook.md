@@ -1,12 +1,12 @@
 # Agent Playbook
 
-This repository uses Brat as the primary CLI and Grit as the substrate for task and memory state.
+This repository uses Brat as the primary CLI and Grite as the substrate for task and memory state.
 
 ## Non-interactive contract
 
 - Use `--json` for all reads.
 - Do not run interactive commands (no editor prompts).
-- Do not force-push `refs/grit/*`.
+- Do not force-push `refs/grite/*`.
 - On inconsistencies, run `brat doctor --check --json` and follow the plan.
 
 ## Startup routine

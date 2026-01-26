@@ -1,12 +1,12 @@
 # Roles
 
-Brat preserves the Gastown role topology. Roles are behavioral conventions that emit explicit actions via Grit issues, comments, labels, and locks.
+Brat preserves the Gastown role topology. Roles are behavioral conventions that emit explicit actions via Grite issues, comments, labels, and locks.
 
 ## Mayor (control plane)
 
-- Creates convoys and tasks as Grit issues
+- Creates convoys and tasks as Grite issues
 - Assigns tasks and updates labels/state
-- Monitors status via Grit queries
+- Monitors status via Grite queries
 - Never manages processes directly beyond user UX
 
 ## Witness (worker controller)
@@ -15,14 +15,14 @@ Brat preserves the Gastown role topology. Roles are behavioral conventions that 
   - decides how many polecats
   - spawns via the engine adapter
   - monitors heartbeats and progress
-  - posts lifecycle updates as Grit comments or labels
+  - posts lifecycle updates as Grite comments or labels
 - If `bratd` is absent: `brat witness run` can execute the controller once
 
 ## Refinery (integration controller)
 
 - Consumes completed task outputs and manages the merge queue
 - Owns merge policy (parallelism, rebase strategy, required checks)
-- Posts merge results as Grit updates (labels, comments, links)
+- Posts merge results as Grite updates (labels, comments, links)
 
 ## Deacon (janitor/reconciler)
 

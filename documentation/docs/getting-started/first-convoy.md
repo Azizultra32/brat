@@ -13,7 +13,7 @@ By the end of this tutorial, you'll have:
 
 ## Prerequisites
 
-- Brat and Grit installed ([Installation](installation.md))
+- Brat and Grite installed ([Installation](installation.md))
 - An AI engine configured (e.g., Claude Code, Aider)
 - A project repository to work on
 
@@ -23,7 +23,7 @@ If you haven't already:
 
 ```bash
 cd your-project
-grit init
+grite init
 brat init
 ```
 

@@ -1,6 +1,6 @@
 # Label glossary
 
-This doc defines the canonical labels used by Brat when writing to Grit. Labels are lowercase with `:` separators unless noted.
+This doc defines the canonical labels used by Brat when writing to Grite. Labels are lowercase with `:` separators unless noted.
 
 ## Identity
 

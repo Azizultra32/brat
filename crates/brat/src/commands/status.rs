@@ -4,9 +4,9 @@ use std::time::Duration;
 
 use chrono::Utc;
 use libbrat_config::InterventionsConfig;
-use libbrat_grite::{
-    Convoy, GriteClient, Session, SessionStatus as GritSessionStatus, Task,
-    TaskStatus as GritTaskStatus,
+use libbrat_gritee::{
+    Convoy, GriteeClient, Session, SessionStatus as GriteSessionStatus, Task,
+    TaskStatus as GriteTaskStatus,
 };
 use serde::{Deserialize, Serialize};
 
@@ -183,9 +183,9 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
     // Require that brat is initialized
     let _config = ctx.require_initialized()?;
 
-    // Check if grite is initialized
-    if !ctx.is_grite_initialized() {
-        // Return empty status if grite not initialized
+    // Check if gritee is initialized
+    if !ctx.is_gritee_initialized() {
+        // Return empty status if gritee not initialized
         return Ok(StatusOutput {
             schema_version: 1,
             generated_ts: Utc::now().timestamp_millis(),
@@ -199,12 +199,12 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
         });
     }
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
 
-    // Query convoys from Grite
+    // Query convoys from Gritee
     let convoys = client.convoy_list().unwrap_or_default();
 
-    // Query tasks from Grite
+    // Query tasks from Gritee
     let all_tasks = client.task_list(None).unwrap_or_default();
 
     // Filter by convoy if specified
@@ -229,12 +229,12 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
             .entry(task.convoy_id.clone())
             .or_default();
         match task.status {
-            GritTaskStatus::Queued => counts.queued += 1,
-            GritTaskStatus::Running => counts.running += 1,
-            GritTaskStatus::Blocked => counts.blocked += 1,
-            GritTaskStatus::NeedsReview => counts.needs_review += 1,
-            GritTaskStatus::Merged => counts.merged += 1,
-            GritTaskStatus::Dropped => counts.dropped += 1,
+            GriteTaskStatus::Queued => counts.queued += 1,
+            GriteTaskStatus::Running => counts.running += 1,
+            GriteTaskStatus::Blocked => counts.blocked += 1,
+            GriteTaskStatus::NeedsReview => counts.needs_review += 1,
+            GriteTaskStatus::Merged => counts.merged += 1,
+            GriteTaskStatus::Dropped => counts.dropped += 1,
         }
     }
 
@@ -259,17 +259,17 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
     let mut total_counts = TaskCounts::default();
     for task in &tasks {
         match task.status {
-            GritTaskStatus::Queued => total_counts.queued += 1,
-            GritTaskStatus::Running => total_counts.running += 1,
-            GritTaskStatus::Blocked => total_counts.blocked += 1,
-            GritTaskStatus::NeedsReview => total_counts.needs_review += 1,
-            GritTaskStatus::Merged => total_counts.merged += 1,
-            GritTaskStatus::Dropped => total_counts.dropped += 1,
+            GriteTaskStatus::Queued => total_counts.queued += 1,
+            GriteTaskStatus::Running => total_counts.running += 1,
+            GriteTaskStatus::Blocked => total_counts.blocked += 1,
+            GriteTaskStatus::NeedsReview => total_counts.needs_review += 1,
+            GriteTaskStatus::Merged => total_counts.merged += 1,
+            GriteTaskStatus::Dropped => total_counts.dropped += 1,
         }
     }
 
-    // Query sessions from Grite
-    let grite_sessions: Vec<Session> = if let Some(ref convoy_id) = args.convoy {
+    // Query sessions from Gritee
+    let gritee_sessions: Vec<Session> = if let Some(ref convoy_id) = args.convoy {
         // Get sessions for tasks in this convoy only
         let mut sessions = Vec::new();
         for task in &tasks {
@@ -285,9 +285,9 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
     };
 
     // Convert to output format, filtering out Exit sessions
-    let session_statuses: Vec<SessionStatus> = grite_sessions
+    let session_statuses: Vec<SessionStatus> = gritee_sessions
         .into_iter()
-        .filter(|s| s.status != GritSessionStatus::Exit)
+        .filter(|s| s.status != GriteSessionStatus::Exit)
         .map(|s| SessionStatus {
             session_id: s.session_id,
             task_id: s.task_id,
@@ -347,10 +347,10 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
 // Helper functions for status queries
 // =============================================================================
 
-/// Query merge queue status from Grite.
+/// Query merge queue status from Gritee.
 ///
 /// Counts tasks with merge:* labels.
-fn query_merge_queue(client: &GriteClient) -> MergeQueueStatus {
+fn query_merge_queue(client: &GriteeClient) -> MergeQueueStatus {
     let mut status = MergeQueueStatus::default();
 
     // Query all tasks and check for merge labels
@@ -359,7 +359,7 @@ fn query_merge_queue(client: &GriteClient) -> MergeQueueStatus {
     if let Ok(tasks) = client.task_list(None) {
         for task in tasks {
             // Tasks in NeedsReview status are candidates for merge queue
-            if task.status == GritTaskStatus::NeedsReview {
+            if task.status == GriteTaskStatus::NeedsReview {
                 status.queued += 1;
             }
         }
@@ -372,24 +372,24 @@ fn query_merge_queue(client: &GriteClient) -> MergeQueueStatus {
     status
 }
 
-/// Grit lock status JSON response envelope.
+/// Grite lock status JSON response envelope.
 #[derive(Debug, Deserialize)]
-struct GritLockResponse {
+struct GriteLockResponse {
     #[allow(dead_code)]
     ok: bool,
-    data: Option<GritLockData>,
+    data: Option<GriteLockData>,
     #[allow(dead_code)]
-    error: Option<GritLockError>,
+    error: Option<GriteLockError>,
 }
 
 #[derive(Debug, Deserialize)]
-struct GritLockData {
+struct GriteLockData {
     #[serde(default)]
-    locks: Vec<GritLockEntry>,
+    locks: Vec<GriteLockEntry>,
 }
 
 #[derive(Debug, Deserialize)]
-struct GritLockEntry {
+struct GriteLockEntry {
     resource: String,
     owner: String,
     #[serde(default)]
@@ -397,16 +397,16 @@ struct GritLockEntry {
 }
 
 #[derive(Debug, Deserialize)]
-struct GritLockError {
+struct GriteLockError {
     #[allow(dead_code)]
     message: String,
 }
 
-/// Query locks from Grite.
+/// Query locks from Gritee.
 ///
-/// Shells out to `grite lock status --json`.
+/// Shells out to `gritee lock status --json`.
 fn query_locks(repo_root: &std::path::Path) -> Vec<LockStatus> {
-    let output = Command::new("grite")
+    let output = Command::new("gritee")
         .args(["lock", "status", "--json"])
         .current_dir(repo_root)
         .output();
@@ -414,7 +414,7 @@ fn query_locks(repo_root: &std::path::Path) -> Vec<LockStatus> {
     match output {
         Ok(result) if result.status.success() => {
             let stdout = String::from_utf8_lossy(&result.stdout);
-            if let Ok(response) = serde_json::from_str::<GritLockResponse>(&stdout) {
+            if let Ok(response) = serde_json::from_str::<GriteLockResponse>(&stdout) {
                 if let Some(data) = response.data {
                     return data
                         .locks
@@ -429,7 +429,7 @@ fn query_locks(repo_root: &std::path::Path) -> Vec<LockStatus> {
             }
             Vec::new()
         }
-        _ => Vec::new(), // Graceful fallback if grite lock status isn't available
+        _ => Vec::new(), // Graceful fallback if gritee lock status isn't available
     }
 }
 
@@ -471,7 +471,7 @@ fn detect_interventions(
 
     // Detect blocked tasks
     for task in tasks {
-        if task.status == GritTaskStatus::Blocked {
+        if task.status == GriteTaskStatus::Blocked {
             interventions.push(Intervention {
                 kind: "blocked_task".to_string(),
                 summary: format!("Task {} is blocked", task.task_id),

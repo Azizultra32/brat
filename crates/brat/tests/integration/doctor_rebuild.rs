@@ -64,13 +64,13 @@ fn test_doctor_rebuild_recovers_state() {
     ]);
     println!("Created task: {}", task.task_id);
 
-    // Record state before corruption (grite uses sled database, not git refs)
+    // Record state before corruption (gritee uses sled database, not git refs)
     let status_before = repo.brat_expect(&["status"]);
     let status_before_str = String::from_utf8_lossy(&status_before.stdout).to_string();
     println!("Status before: {}", status_before_str.lines().count());
 
     // Try to corrupt local sled cache if it exists
-    let sled_path = repo.path.join(".git/grite/db");
+    let sled_path = repo.path.join(".git/gritee/db");
     if sled_path.exists() {
         println!("Corrupting sled cache at {:?}", sled_path);
         if let Err(e) = std::fs::remove_dir_all(&sled_path) {
@@ -92,7 +92,7 @@ fn test_doctor_rebuild_recovers_state() {
         rebuild.errors
     );
 
-    // Verify state recovered (grite uses sled database, not git refs)
+    // Verify state recovered (gritee uses sled database, not git refs)
     // The rebuild should recover the state from the event log
     let status_after = repo.brat_expect(&["status"]);
     let status_after_str = String::from_utf8_lossy(&status_after.stdout).to_string();

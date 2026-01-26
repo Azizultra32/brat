@@ -38,9 +38,9 @@ pub async fn run(cli: &Cli, cmd: &WitnessCommand) -> Result<(), BratError> {
 async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
 
-    // Require both brat and grite to be initialized
+    // Require both brat and gritee to be initialized
     let config = ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
     // Check if witness role is enabled
     if !config.roles.witness_enabled {
@@ -49,11 +49,11 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
 
     // Reconcile stale sessions before starting (unless skipped)
     if !args.skip_reconcile {
-        let grite = ctx.grite_client();
+        let gritee = ctx.gritee_client();
         let worktree_manager = ctx.worktree_manager().ok();
         let interventions_config = config.interventions.clone();
 
-        let reconcile = ReconcileWorkflow::new(grite, worktree_manager, interventions_config);
+        let reconcile = ReconcileWorkflow::new(gritee, worktree_manager, interventions_config);
         match reconcile.run_once() {
             Ok(result) => {
                 if result.had_actions() && !cli.quiet && !cli.json {
@@ -77,8 +77,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
     // Build workflow config
     let witness_config = WitnessConfig::from_brat_config(config);
 
-    // Create GriteClient and WorktreeManager
-    let grite = ctx.grite_client();
+    // Create GriteeClient and WorktreeManager
+    let gritee = ctx.gritee_client();
     let worktree_manager = ctx.worktree_manager().ok();
 
     // Determine engine: CLI flag takes precedence over config
@@ -95,7 +95,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 print_human(cli, "Using Codex engine");
             }
             let engine = CodexEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
         "claude" | "claude-code" => {
@@ -103,7 +103,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 print_human(cli, "Using Claude Code engine");
             }
             let engine = ClaudeCodeEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
         "opencode" => {
@@ -111,7 +111,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 print_human(cli, "Using OpenCode engine (open source Claude Code alternative)");
             }
             let engine = OpenCodeEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
         "aider" => {
@@ -119,7 +119,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 print_human(cli, "Using Aider engine");
             }
             let engine = AiderEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
         "gemini" => {
@@ -127,7 +127,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 print_human(cli, "Using Gemini engine (Google's Gemini CLI)");
             }
             let engine = GeminiEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
         "copilot" => {
@@ -135,7 +135,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 print_human(cli, "Using GitHub Copilot CLI engine");
             }
             let engine = CopilotEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
         "continue" => {
@@ -143,7 +143,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 print_human(cli, "Using Continue.dev engine");
             }
             let engine = ContinueEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
         "shell" => {
@@ -151,7 +151,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 print_human(cli, "Using Shell engine");
             }
             let engine = ShellEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
         _ => {
@@ -166,7 +166,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                 );
             }
             let engine = ClaudeCodeEngine::new();
-            let workflow = WitnessWorkflow::new(witness_config, grite, engine, worktree_manager);
+            let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
     }

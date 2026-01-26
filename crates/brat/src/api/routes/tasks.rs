@@ -4,7 +4,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
-use libbrat_grite::TaskStatus;
+use libbrat_gritee::TaskStatus;
 use serde::{Deserialize, Serialize};
 
 use crate::api::state::DaemonState;
@@ -15,7 +15,7 @@ use super::status::ErrorResponse;
 #[derive(Serialize)]
 pub struct TaskResponse {
     pub task_id: String,
-    pub grite_issue_id: String,
+    pub gritee_issue_id: String,
     pub convoy_id: String,
     pub title: String,
     pub body: String,
@@ -84,7 +84,7 @@ async fn list_tasks(
         )
     })?;
 
-    let tasks = ctx.grite.task_list(query.convoy.as_deref()).map_err(|e| {
+    let tasks = ctx.gritee.task_list(query.convoy.as_deref()).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -97,7 +97,7 @@ async fn list_tasks(
         .into_iter()
         .map(|t| TaskResponse {
             task_id: t.task_id,
-            grite_issue_id: t.grite_issue_id,
+            gritee_issue_id: t.gritee_issue_id,
             convoy_id: t.convoy_id,
             title: t.title,
             body: t.body,
@@ -135,7 +135,7 @@ async fn create_task(
     };
 
     let task = ctx
-        .grite
+        .gritee
         .task_create(&req.convoy_id, &req.title, body)
         .map_err(|e| {
             (
@@ -150,7 +150,7 @@ async fn create_task(
         StatusCode::CREATED,
         Json(TaskResponse {
             task_id: task.task_id,
-            grite_issue_id: task.grite_issue_id,
+            gritee_issue_id: task.gritee_issue_id,
             convoy_id: task.convoy_id,
             title: task.title,
             body: task.body,
@@ -174,7 +174,7 @@ async fn get_task(
     })?;
 
     // List tasks and find the one with matching ID
-    let tasks = ctx.grite.task_list(None).map_err(|e| {
+    let tasks = ctx.gritee.task_list(None).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -197,7 +197,7 @@ async fn get_task(
 
     Ok(Json(TaskResponse {
         task_id: task.task_id,
-        grite_issue_id: task.grite_issue_id,
+        gritee_issue_id: task.gritee_issue_id,
         convoy_id: task.convoy_id,
         title: task.title,
         body: task.body,
@@ -229,7 +229,7 @@ async fn update_task(
         )
     })?;
 
-    ctx.grite
+    ctx.gritee
         .task_update_status(&task_id, new_status)
         .map_err(|e| {
             (
@@ -241,7 +241,7 @@ async fn update_task(
         })?;
 
     // Fetch the updated task
-    let tasks = ctx.grite.task_list(None).map_err(|e| {
+    let tasks = ctx.gritee.task_list(None).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -264,7 +264,7 @@ async fn update_task(
 
     Ok(Json(TaskResponse {
         task_id: task.task_id,
-        grite_issue_id: task.grite_issue_id,
+        gritee_issue_id: task.gritee_issue_id,
         convoy_id: task.convoy_id,
         title: task.title,
         body: task.body,

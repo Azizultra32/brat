@@ -24,7 +24,7 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
 - **Rust** (stable, 1.75+): Install via [rustup](https://rustup.rs/)
 - **Node.js** (20+): For the web UI
 - **Git**: Version 2.30+
-- **Grit**: The substrate for brat - see [grit repository](https://github.com/anthropics/grit)
+- **Grite**: The substrate for brat - see [grite repository](https://github.com/anthropics/grite)
 
 ### Development Setup
 
@@ -138,7 +138,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 ///
 /// # Errors
 ///
-/// Returns an error if the title is empty or if grit operations fail.
+/// Returns an error if the title is empty or if grite operations fail.
 pub fn create_convoy(title: &str, body: Option<&str>) -> Result<Convoy> {
     // ...
 }
@@ -209,7 +209,7 @@ brat/
 ├── crates/
 │   ├── brat/           # Main CLI binary
 │   ├── libbrat-engine/ # Core engine logic
-│   ├── libbrat-grit/   # Grit integration
+│   ├── libbrat-grite/   # Grite integration
 │   └── libbrat-ipc/    # IPC protocols
 ├── brat-ui/            # Vue.js web dashboard
 ├── docs/               # Architecture documentation

@@ -7,7 +7,7 @@
    - Two machines produce events offline, then push/pull; projections converge.
 
 3. Daemon optional
-   - With `gritd` stopped, `brat` can still create tasks, comment, and rebuild projections.
+   - With `grited` stopped, `brat` can still create tasks, comment, and rebuild projections.
 
 4. No silent death
    - Kill an engine process; harness posts a task comment with exit code and last logs.

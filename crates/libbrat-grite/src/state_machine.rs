@@ -2,7 +2,7 @@
 //!
 //! This module provides generic state machine validation for tasks, sessions,
 //! convoys, and roles. Transitions are validated against defined rules before
-//! being persisted to Grite.
+//! being persisted to Gritee.
 
 use std::fmt::{Debug, Display};
 use std::hash::Hash;

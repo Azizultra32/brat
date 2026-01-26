@@ -11,8 +11,8 @@ pub struct ConvoyCreateOutput {
     /// Brat convoy ID.
     pub convoy_id: String,
 
-    /// Grit's internal issue ID.
-    pub grite_issue_id: String,
+    /// Grite's internal issue ID.
+    pub gritee_issue_id: String,
 
     /// Convoy title.
     pub title: String,
@@ -32,16 +32,16 @@ pub fn run(cli: &Cli, cmd: &ConvoyCommand) -> Result<(), BratError> {
 fn run_create(cli: &Cli, args: &ConvoyCreateArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
 
-    // Require both brat and grite to be initialized
+    // Require both brat and gritee to be initialized
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
-    let client = ctx.grite_client();
+    let client = ctx.gritee_client();
     let convoy = client.convoy_create(&args.title, args.body.as_deref())?;
 
     let output = ConvoyCreateOutput {
         convoy_id: convoy.convoy_id.clone(),
-        grite_issue_id: convoy.grite_issue_id,
+        gritee_issue_id: convoy.gritee_issue_id,
         title: convoy.title,
         status: format!("{:?}", convoy.status).to_lowercase(),
     };

@@ -7,18 +7,18 @@ This guide covers installing Brat and its dependencies.
 - **Rust toolchain** (1.75 or later)
 - **Git** (2.30 or later)
 
-## Install Grit
+## Install Grite
 
-Brat is built on [Grit](https://github.com/neul-labs/grit), an append-only event log. Install Grit first:
+Brat is built on [Grite](https://github.com/neul-labs/grite), an append-only event log. Install Grite first:
 
 ```bash
-cargo install --git https://github.com/neul-labs/grit grit
+cargo install --git https://github.com/neul-labs/grite grite
 ```
 
 Verify the installation:
 
 ```bash
-grit --version
+grite --version
 ```
 
 ## Install Brat
@@ -50,7 +50,7 @@ cargo install brat
 Check that both tools are installed:
 
 ```bash
-grit --version
+grite --version
 brat --version
 ```
 

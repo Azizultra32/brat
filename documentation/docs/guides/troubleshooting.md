@@ -165,7 +165,7 @@ brat doctor --check
 
 Reports issues with:
 
-- Grit WAL consistency
+- Grite WAL consistency
 - Lock state
 - Session health
 - Configuration
@@ -211,13 +211,13 @@ brat lock status  # See who holds the lock
 
 ### "WAL append failed"
 
-Failed to write to the Grit event log.
+Failed to write to the Grite event log.
 
 Solutions:
 
 - Check disk space
 - Check Git permissions
-- Run `grit doctor --fix`
+- Run `grite doctor --fix`
 
 ## Getting Logs
 

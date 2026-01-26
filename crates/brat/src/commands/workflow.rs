@@ -136,11 +136,11 @@ fn run_show(cli: &Cli, args: &WorkflowShowArgs) -> Result<(), BratError> {
 fn run_run(cli: &Cli, args: &WorkflowRunArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
     let parser = WorkflowParser::from_repo_root(&ctx.repo_root);
-    let grite = ctx.grite_client();
-    let executor = WorkflowExecutor::new(grite);
+    let gritee = ctx.gritee_client();
+    let executor = WorkflowExecutor::new(gritee);
 
     // Load the workflow template
     let template = parser

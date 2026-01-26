@@ -9,7 +9,7 @@ use std::path::Path;
 
 /// Write session logs and return the hash reference.
 ///
-/// Logs are written to `<repo_root>/.grite/logs/<session_id>.log`.
+/// Logs are written to `<repo_root>/.gritee/logs/<session_id>.log`.
 /// The hash reference is returned in the format `sha256:<hex>`.
 ///
 /// # Arguments
@@ -26,11 +26,11 @@ pub fn write_session_logs(
     session_id: &str,
     lines: &[String],
 ) -> std::io::Result<String> {
-    // Ensure .grite/logs/ directory exists
-    let logs_dir = repo_root.join(".grite").join("logs");
+    // Ensure .gritee/logs/ directory exists
+    let logs_dir = repo_root.join(".gritee").join("logs");
     fs::create_dir_all(&logs_dir)?;
 
-    // Write to .grite/logs/<session_id>.log
+    // Write to .gritee/logs/<session_id>.log
     let log_path = logs_dir.join(format!("{}.log", session_id));
     let content = lines.join("\n");
     fs::write(&log_path, &content)?;
@@ -66,7 +66,7 @@ mod tests {
         assert_eq!(hash_ref.len(), 7 + 64); // "sha256:" + 64 hex chars
 
         // Verify log file exists
-        let log_path = temp_dir.join(".grite").join("logs").join("s-20250117-test.log");
+        let log_path = temp_dir.join(".gritee").join("logs").join("s-20250117-test.log");
         assert!(log_path.exists());
 
         // Verify content

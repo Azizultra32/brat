@@ -1,6 +1,6 @@
-# Canonical spec (Brat + Grit)
+# Canonical spec (Brat + Grite)
 
-This doc is the single source of truth for identifiers, labels, comment schemas, and file locations used by the Brat harness and Grit substrate.
+This doc is the single source of truth for identifiers, labels, comment schemas, and file locations used by the Brat harness and Grite substrate.
 
 ## Identifiers
 
@@ -9,7 +9,7 @@ All IDs are ASCII and lowercase where applicable.
 - `convoy_id`: `c-YYYYMMDD-<4hex>` (example `c-20250114-a2f9`)
 - `task_id`: `t-YYYYMMDD-<4hex>` (example `t-20250114-3a2c`)
 - `session_id`: `s-YYYYMMDD-<4hex>` (example `s-20250114-7b3d`)
-- `actor_id`: 16-byte hex string (Grit actor ID)
+- `actor_id`: 16-byte hex string (Grite actor ID)
 
 ## Label taxonomy
 
@@ -68,7 +68,7 @@ session_id = "s-20250114-7b3d"
 role = "witness"
 session_type = "polecat"
 engine = "codex"
-worktree = ".grit/worktrees/polecat-3"
+worktree = ".grite/worktrees/polecat-3"
 pid = 12345
 started_ts = 1700000000000
 last_heartbeat_ts = 1700000005000
@@ -92,15 +92,15 @@ Use labels `to:<actor_id>`, `needs-ack`, `ack:<actor_id>`, `urgency:low|med|high
 
 ## Storage locations
 
-- Grit WAL: `refs/grit/wal`
-- Grit locks: `refs/grit/locks/*`
-- Grit actors: `.git/grit/actors/<actor_id>/`
-- Grit exports: `.grit/`
-- Brat worktrees: `.grit/worktrees/polecat-<n>`
+- Grite WAL: `refs/grite/wal`
+- Grite locks: `refs/grite/locks/*`
+- Grite actors: `.git/grite/actors/<actor_id>/`
+- Grite exports: `.grite/`
+- Brat worktrees: `.grite/worktrees/polecat-<n>`
 - Brat config: `.brat/config.toml`
-- Session logs: `.grit/logs/<session_id>.log` (hashed as `sha256:<hex>` in `last_output_ref`)
+- Session logs: `.grite/logs/<session_id>.log` (hashed as `sha256:<hex>` in `last_output_ref`)
 
 ## Daemon semantics
 
-- `gritd` is optional and only accelerates substrate operations.
+- `grited` is optional and only accelerates substrate operations.
 - `bratd` runs by default for UX but is not required for correctness.

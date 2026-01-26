@@ -19,7 +19,7 @@ idle_timeout_secs = 900
 
 [swarm]
 max_polecats = 6
-worktree_root = ".grit/worktrees"
+worktree_root = ".grite/worktrees"
 engine = "claude"
 
 [engine]
@@ -92,13 +92,13 @@ Agent session management.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `max_polecats` | int | `6` | Max concurrent agent sessions |
-| `worktree_root` | string | `".grit/worktrees"` | Directory for worktrees |
+| `worktree_root` | string | `".grite/worktrees"` | Directory for worktrees |
 | `engine` | string | `"claude"` | Default AI engine |
 
 ```toml
 [swarm]
 max_polecats = 6
-worktree_root = ".grit/worktrees"
+worktree_root = ".grite/worktrees"
 engine = "claude"
 ```
 

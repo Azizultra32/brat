@@ -191,13 +191,13 @@ git add .
 git commit -m "Initial commit: sample Python project with intentional issues" --quiet
 echo "Created sample codebase with TODOs and bugs"
 
-# 5. Initialize grit
+# 5. Initialize grite
 echo ""
-echo "Initializing grit..."
-if command -v grit &> /dev/null; then
-    grit init 2>/dev/null || echo "  (grit already initialized or not available)"
+echo "Initializing grite..."
+if command -v grite &> /dev/null; then
+    grite init 2>/dev/null || echo "  (grite already initialized or not available)"
 else
-    echo "  WARNING: grit not found in PATH"
+    echo "  WARNING: grite not found in PATH"
 fi
 
 # 6. Initialize brat (no daemon, no tmux for testing)

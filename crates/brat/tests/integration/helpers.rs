@@ -17,7 +17,7 @@ fn brat_bin() -> PathBuf {
     path
 }
 
-/// A temporary git repository with Brat and Grit initialized.
+/// A temporary git repository with Brat and Grite initialized.
 pub struct TestRepo {
     pub dir: TempDir,
     pub path: PathBuf,
@@ -28,7 +28,7 @@ impl TestRepo {
     ///
     /// Initializes:
     /// - Git repository with initial commit
-    /// - Grit ledger
+    /// - Grite ledger
     /// - Brat configuration (no daemon, no tmux)
     ///
     /// The repository is created in a subdirectory of the temp dir
@@ -49,8 +49,8 @@ impl TestRepo {
         run_cmd_expect(&path, "git", &["add", "."]);
         run_cmd_expect(&path, "git", &["commit", "-m", "Initial commit"]);
 
-        // Initialize grite (no daemon, no agents.md for clean testing)
-        run_cmd_expect(&path, "grite", &["init", "--no-daemon", "--no-agents-md"]);
+        // Initialize gritee (no daemon, no agents.md for clean testing)
+        run_cmd_expect(&path, "gritee", &["init", "--no-daemon", "--no-agents-md"]);
 
         // Initialize brat (no daemon, no tmux, no agents.md for isolated testing)
         run_cmd_expect(&path, brat_bin().to_str().unwrap(), &["init", "--no-daemon", "--no-tmux", "--no-agents-md"]);
@@ -63,7 +63,7 @@ impl TestRepo {
         Self { dir, path }
     }
 
-    /// Create a new test repository with only git initialized (no grite/brat).
+    /// Create a new test repository with only git initialized (no gritee/brat).
     pub fn new_git_only() -> Self {
         let dir = TempDir::new().expect("create temp dir");
         // Create repo in a subdirectory so worktrees can be siblings
@@ -87,7 +87,7 @@ impl TestRepo {
     ///
     /// Automatically adds `--no-daemon` to avoid daemon auto-start in tests.
     /// Uses the locally built brat binary instead of the one in PATH.
-    /// Sets GRITE_NO_DAEMON=1 to ensure grite commands also skip the daemon.
+    /// Sets GRITE_NO_DAEMON=1 to ensure gritee commands also skip the daemon.
     pub fn brat(&self, args: &[&str]) -> Output {
         let mut full_args = vec!["--no-daemon"];
         full_args.extend(args);
@@ -159,25 +159,25 @@ impl TestRepo {
         output
     }
 
-    /// Run a grite command and return output.
+    /// Run a gritee command and return output.
     ///
     /// Automatically adds `--no-daemon` to avoid IPC timeout issues in tests.
-    pub fn grite(&self, args: &[&str]) -> Output {
+    pub fn gritee(&self, args: &[&str]) -> Output {
         let mut full_args = vec!["--no-daemon"];
         full_args.extend(args);
-        Command::new("grite")
+        Command::new("gritee")
             .args(&full_args)
             .current_dir(&self.path)
             .output()
-            .expect("run grite")
+            .expect("run gritee")
     }
 
-    /// Run a grite command and assert it succeeds.
-    pub fn grite_expect(&self, args: &[&str]) -> Output {
-        let output = self.grite(args);
+    /// Run a gritee command and assert it succeeds.
+    pub fn gritee_expect(&self, args: &[&str]) -> Output {
+        let output = self.gritee(args);
         assert!(
             output.status.success(),
-            "grite {:?} failed: {}",
+            "gritee {:?} failed: {}",
             args,
             String::from_utf8_lossy(&output.stderr)
         );
@@ -233,7 +233,7 @@ impl TestRepo {
 
 /// Run a command in a directory and return output.
 ///
-/// Sets GRITE_NO_DAEMON=1 to ensure all grite/brat commands skip the daemon.
+/// Sets GRITE_NO_DAEMON=1 to ensure all gritee/brat commands skip the daemon.
 pub fn run_cmd(dir: &PathBuf, cmd: &str, args: &[&str]) -> Output {
     Command::new(cmd)
         .args(args)

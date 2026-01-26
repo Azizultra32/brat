@@ -38,9 +38,9 @@ pub async fn run(cli: &Cli, cmd: &RefineryCommand) -> Result<(), BratError> {
 async fn run_refinery(cli: &Cli, args: &RefineryRunArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
 
-    // Require both brat and grite to be initialized
+    // Require both brat and gritee to be initialized
     let config = ctx.require_initialized()?;
-    ctx.require_grite_initialized()?;
+    ctx.require_gritee_initialized()?;
 
     // Check if refinery role is enabled
     if !config.roles.refinery_enabled {
@@ -50,11 +50,11 @@ async fn run_refinery(cli: &Cli, args: &RefineryRunArgs) -> Result<(), BratError
     // Build workflow config
     let refinery_config = RefineryConfig::from_brat_config(config);
 
-    // Create GriteClient
-    let grite = ctx.grite_client();
+    // Create GriteeClient
+    let gritee = ctx.gritee_client();
 
     // Create workflow
-    let mut workflow = RefineryWorkflow::new(refinery_config, grite, ctx.repo_root.clone());
+    let mut workflow = RefineryWorkflow::new(refinery_config, gritee, ctx.repo_root.clone());
 
     if args.once {
         // Single iteration mode

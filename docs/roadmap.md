@@ -2,32 +2,32 @@
 
 ## Status Overview
 
-Grit (the substrate) is implemented in a separate repository and provides the foundation. This roadmap tracks Brat (the harness) development.
+Grite (the substrate) is implemented in a separate repository and provides the foundation. This roadmap tracks Brat (the harness) development.
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| Grit substrate | **Complete** | `/home/dipankar/Code/grit` |
+| Grite substrate | **Complete** | `/home/dipankar/Code/grite` |
 | Brat harness | **Milestone 5 complete** | This repo |
 
 ---
 
-## Grit Milestones (Complete)
+## Grite Milestones (Complete)
 
-These milestones are implemented in the Grit repository.
+These milestones are implemented in the Grite repository.
 
-### Milestone 1: Grit core (done)
+### Milestone 1: Grite core (done)
 
 - [x] Event model + hashing
 - [x] sled projections
 - [x] CLI: init, actor management, create/list/show/update/comment/close
 - [x] Export to markdown/json (with schema)
 - [x] Tests: deterministic rebuild
-- [x] `grit db stats` output schema
+- [x] `grite db stats` output schema
 
 ### Milestone 2: Git WAL + sync (done)
 
 - [x] WAL commit writer/reader
-- [x] Push/pull `refs/grit/*`
+- [x] Push/pull `refs/grite/*`
 - [x] Handle remote-advanced push (fast-forward rebase)
 - [x] Snapshot support
 - [x] Portable WAL encoding (CBOR)
@@ -36,7 +36,7 @@ These milestones are implemented in the Grit repository.
 ### Milestone 3: Daemon + IPC (done)
 
 - [x] Daemon discovery
-- [x] `grit` routes all commands through the daemon if present for the selected `(repo, actor)`
+- [x] `grite` routes all commands through the daemon if present for the selected `(repo, actor)`
 - [x] Pub/sub notifications
 - [x] Daemon ownership lock with lease/heartbeat
 - [x] Multi-repo, multi-actor workers
@@ -46,7 +46,7 @@ These milestones are implemented in the Grit repository.
 - [x] Lease locks stored in refs
 - [x] Lock GC
 - [x] Lock policy enforcement (`off|warn|require`)
-- [x] `grit lock status`
+- [x] `grite lock status`
 
 ---
 
@@ -54,12 +54,12 @@ These milestones are implemented in the Grit repository.
 
 ### Milestone 5: Harness integration (Complete)
 
-- [x] Map harness tasks to Grit issues and labels
+- [x] Map harness tasks to Grite issues and labels
 - [x] State machine spec and implementation (see `docs/state-machine.md`)
 - [x] Session reconciliation on startup and crash recovery
 - [x] Observability contract (exit code, reason, last logs)
 - [x] Non-blocking UX contract for harness commands
-- [x] Witness/Refinery workflows post updates as Grit comments
+- [x] Witness/Refinery workflows post updates as Grite comments
 - [x] Worktree manager for polecats
 - [x] Engine integration for session lifecycle
 - [x] Merge queue policy + retry rules
@@ -69,7 +69,7 @@ These milestones are implemented in the Grit repository.
 
 ### Milestone 6: Hardening (Current Focus)
 
-- [x] Stress tests (concurrent writers) - in Grit repo
+- [x] Stress tests (concurrent writers) - in Grite repo
 - [ ] Corruption recovery
 - [ ] Security (signing and verification)
 - [ ] DB maintenance thresholds and docs

@@ -4,17 +4,17 @@ Get up and running with Brat in 5 minutes.
 
 ## Initialize Your Repository
 
-Navigate to your project and initialize both Grit and Brat:
+Navigate to your project and initialize both Grite and Brat:
 
 ```bash
 cd your-project
-grit init      # Initialize the Grit substrate
+grite init      # Initialize the Grite substrate
 brat init      # Initialize the Brat harness
 ```
 
 This creates:
 
-- `refs/grit/wal` - The append-only event log
+- `refs/grite/wal` - The append-only event log
 - `.brat/config.toml` - Brat configuration file
 
 ## Check Status
