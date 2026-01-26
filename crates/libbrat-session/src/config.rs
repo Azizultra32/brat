@@ -10,7 +10,7 @@ pub struct MonitorConfig {
     /// Default: 10 seconds.
     pub health_poll_interval: Duration,
 
-    /// Interval between heartbeat updates to Grit.
+    /// Interval between heartbeat updates to Grite.
     ///
     /// Default: 30 seconds.
     pub heartbeat_interval: Duration,

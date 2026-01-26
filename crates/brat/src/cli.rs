@@ -42,6 +42,10 @@ pub enum Command {
     #[command(subcommand)]
     Task(TaskCommand),
 
+    /// Context store (symbol extraction and querying)
+    #[command(subcommand)]
+    Context(ContextCommand),
+
     /// Witness workflow (polecat session management)
     #[command(subcommand)]
     Witness(WitnessCommand),
@@ -91,6 +95,10 @@ pub struct InitArgs {
     /// Don't create .brat/config.toml
     #[arg(long)]
     pub no_config: bool,
+
+    /// Don't create/update AGENTS.md
+    #[arg(long)]
+    pub no_agents_md: bool,
 }
 
 /// Arguments for the status command
@@ -140,6 +148,26 @@ pub enum TaskCommand {
 
     /// Update task status
     Update(TaskUpdateArgs),
+
+    /// Manage task dependencies
+    #[command(subcommand)]
+    Dep(TaskDepCommand),
+}
+
+/// Task dependency subcommands
+#[derive(Subcommand, Debug)]
+pub enum TaskDepCommand {
+    /// Add a dependency between tasks
+    Add(TaskDepAddArgs),
+
+    /// Remove a dependency between tasks
+    Remove(TaskDepRemoveArgs),
+
+    /// List dependencies for a task
+    List(TaskDepListArgs),
+
+    /// Show tasks in topological order (ready-to-run first)
+    Topo(TaskDepTopoArgs),
 }
 
 /// Arguments for task create
@@ -171,6 +199,121 @@ pub struct TaskUpdateArgs {
     /// Force the transition (bypass state machine validation)
     #[arg(long)]
     pub force: bool,
+}
+
+/// Arguments for task dep add
+#[derive(Parser, Debug)]
+pub struct TaskDepAddArgs {
+    /// Task ID (source of the dependency)
+    pub task_id: String,
+
+    /// Target task ID (the task this one depends on or blocks)
+    #[arg(long)]
+    pub target: String,
+
+    /// Dependency type: blocks, depends_on, or related_to
+    #[arg(long, short = 't', default_value = "depends_on")]
+    pub dep_type: String,
+}
+
+/// Arguments for task dep remove
+#[derive(Parser, Debug)]
+pub struct TaskDepRemoveArgs {
+    /// Task ID (source of the dependency)
+    pub task_id: String,
+
+    /// Target task ID
+    #[arg(long)]
+    pub target: String,
+
+    /// Dependency type: blocks, depends_on, or related_to
+    #[arg(long, short = 't', default_value = "depends_on")]
+    pub dep_type: String,
+}
+
+/// Arguments for task dep list
+#[derive(Parser, Debug)]
+pub struct TaskDepListArgs {
+    /// Task ID to list dependencies for
+    pub task_id: String,
+
+    /// List dependents instead of dependencies (reverse direction)
+    #[arg(long, short = 'r')]
+    pub reverse: bool,
+}
+
+/// Arguments for task dep topo
+#[derive(Parser, Debug)]
+pub struct TaskDepTopoArgs {
+    /// Filter by convoy ID
+    #[arg(long)]
+    pub convoy: Option<String>,
+}
+
+/// Context subcommands
+#[derive(Subcommand, Debug)]
+pub enum ContextCommand {
+    /// Index files for symbol extraction
+    Index(ContextIndexArgs),
+
+    /// Query for symbols
+    Query(ContextQueryArgs),
+
+    /// Show context for a file
+    Show(ContextShowArgs),
+
+    /// Get or list project context
+    Project(ContextProjectArgs),
+
+    /// Set a project context value
+    Set(ContextSetArgs),
+}
+
+/// Arguments for context index
+#[derive(Parser, Debug)]
+pub struct ContextIndexArgs {
+    /// Paths to index (if empty, indexes all tracked files)
+    #[arg(long)]
+    pub path: Vec<String>,
+
+    /// Force re-indexing even if content hasn't changed
+    #[arg(long)]
+    pub force: bool,
+
+    /// Glob pattern to filter files
+    #[arg(long)]
+    pub pattern: Option<String>,
+}
+
+/// Arguments for context query
+#[derive(Parser, Debug)]
+pub struct ContextQueryArgs {
+    /// Symbol pattern to search for
+    pub query: String,
+}
+
+/// Arguments for context show
+#[derive(Parser, Debug)]
+pub struct ContextShowArgs {
+    /// File path to show context for
+    pub path: String,
+}
+
+/// Arguments for context project
+#[derive(Parser, Debug)]
+pub struct ContextProjectArgs {
+    /// Key to get (if omitted, lists all entries)
+    pub key: Option<String>,
+}
+
+/// Arguments for context set
+#[derive(Parser, Debug)]
+pub struct ContextSetArgs {
+    /// Key to set
+    pub key: String,
+
+    /// Value to set
+    pub value: String,
 }
 
 /// Witness subcommands

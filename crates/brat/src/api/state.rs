@@ -6,9 +6,61 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use libbrat_config::BratConfig;
-use libbrat_grit::GritClient;
+use libbrat_grite::GriteClient;
 use libbrat_worktree::WorktreeManager;
-use tokio::sync::RwLock;
+use serde::Serialize;
+use tokio::sync::{broadcast, RwLock};
+
+/// Events broadcast to WebSocket clients for real-time updates.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", content = "data")]
+pub enum BratEvent {
+    /// Task status changed.
+    TaskUpdated {
+        task_id: String,
+        status: String,
+        convoy_id: Option<String>,
+    },
+    /// New session started.
+    SessionStarted {
+        session_id: String,
+        task_id: String,
+        engine: String,
+    },
+    /// Session exited (completed or failed).
+    SessionExited {
+        session_id: String,
+        task_id: String,
+        exit_code: i32,
+    },
+    /// Merge completed successfully.
+    MergeCompleted {
+        task_id: String,
+        commit_sha: String,
+        branch: String,
+    },
+    /// Merge failed.
+    MergeFailed {
+        task_id: String,
+        error: String,
+        attempt: u32,
+    },
+    /// Merge was rolled back after push failure.
+    MergeRolledBack {
+        task_id: String,
+        reset_sha: String,
+        reason: String,
+    },
+    /// Merge scheduled for retry.
+    MergeRetryScheduled {
+        task_id: String,
+        retry_at: String,
+        attempt: u32,
+    },
+}
+
+/// Broadcast channel capacity for events.
+const EVENT_CHANNEL_CAPACITY: usize = 256;
 
 /// Default idle timeout in seconds (15 minutes).
 pub const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 900;
@@ -27,18 +79,33 @@ pub struct DaemonState {
     pub idle_timeout: Option<Duration>,
     /// Version string.
     pub version: String,
+    /// Broadcast channel for real-time events to WebSocket clients.
+    event_tx: broadcast::Sender<BratEvent>,
 }
 
 impl DaemonState {
     /// Create new daemon state with optional idle timeout.
     pub fn new(idle_timeout_secs: Option<u64>) -> Self {
+        let (event_tx, _) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
         Self {
             repos: Arc::new(RwLock::new(HashMap::new())),
             start_time: Instant::now(),
             last_activity: Arc::new(RwLock::new(Instant::now())),
             idle_timeout: idle_timeout_secs.map(Duration::from_secs),
             version: env!("CARGO_PKG_VERSION").to_string(),
+            event_tx,
         }
+    }
+
+    /// Broadcast an event to all connected WebSocket clients.
+    pub fn broadcast(&self, event: BratEvent) {
+        // Ignore send errors - they just mean no clients are connected
+        let _ = self.event_tx.send(event);
+    }
+
+    /// Subscribe to events (for WebSocket handlers).
+    pub fn subscribe_events(&self) -> broadcast::Receiver<BratEvent> {
+        self.event_tx.subscribe()
     }
 
     /// Record activity (call this on each request).
@@ -86,8 +153,8 @@ impl DaemonState {
         let config = BratConfig::load(&config_path)
             .map_err(|e| format!("Failed to load config: {}", e))?;
 
-        // Create Grit client
-        let grit = GritClient::new(&path);
+        // Create Grite client
+        let grite = GriteClient::new(&path);
 
         // Create worktree manager
         let worktree_manager = WorktreeManager::new(
@@ -100,7 +167,7 @@ impl DaemonState {
         let context = Arc::new(RepoContext {
             id: repo_id.clone(),
             path: path.clone(),
-            grit,
+            grite,
             config,
             worktree_manager: Some(worktree_manager),
         });
@@ -142,8 +209,8 @@ pub struct RepoContext {
     pub id: String,
     /// Path to repository root.
     pub path: PathBuf,
-    /// Grit client for this repo.
-    pub grit: GritClient,
+    /// Grite client for this repo.
+    pub grite: GriteClient,
     /// Brat configuration.
     pub config: BratConfig,
     /// Worktree manager (if available).

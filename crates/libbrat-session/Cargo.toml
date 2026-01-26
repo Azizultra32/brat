@@ -2,10 +2,17 @@
 name = "libbrat-session"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Session monitoring and lifecycle management for Brat"
+readme = "../../README.md"
 
 [dependencies]
 libbrat-engine.workspace = true
-libbrat-grit.workspace = true
+libbrat-grite.workspace = true
 libbrat-worktree.workspace = true
 
 thiserror.workspace = true

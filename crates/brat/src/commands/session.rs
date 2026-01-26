@@ -60,7 +60,7 @@ pub struct SessionStopOutput {
     pub session_id: String,
     /// Reason for stopping.
     pub reason: String,
-    /// Whether exit was posted to Grit.
+    /// Whether exit was posted to Grite.
     pub exit_posted: bool,
 }
 
@@ -91,9 +91,9 @@ pub fn run(cli: &Cli, cmd: &SessionCommand) -> Result<(), BratError> {
 fn run_list(cli: &Cli, args: &SessionListArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grit_initialized()?;
+    ctx.require_grite_initialized()?;
 
-    let client = ctx.grit_client();
+    let client = ctx.grite_client();
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
@@ -156,9 +156,9 @@ fn run_list(cli: &Cli, args: &SessionListArgs) -> Result<(), BratError> {
 fn run_show(cli: &Cli, args: &SessionShowArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grit_initialized()?;
+    ctx.require_grite_initialized()?;
 
-    let client = ctx.grit_client();
+    let client = ctx.grite_client();
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
@@ -217,9 +217,9 @@ fn run_show(cli: &Cli, args: &SessionShowArgs) -> Result<(), BratError> {
 fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grit_initialized()?;
+    ctx.require_grite_initialized()?;
 
-    let client = ctx.grit_client();
+    let client = ctx.grite_client();
 
     // Record the session exit in Grit
     client.session_exit(&args.session_id, 0, &args.reason, None)?;
@@ -248,9 +248,9 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
 fn run_tail(cli: &Cli, args: &SessionTailArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
-    ctx.require_grit_initialized()?;
+    ctx.require_grite_initialized()?;
 
-    let client = ctx.grit_client();
+    let client = ctx.grite_client();
 
     // Get session to find log blob ref
     let session = client.session_get(&args.session_id)?;
@@ -309,7 +309,7 @@ fn run_tail_follow(
     cli: &Cli,
     repo_root: &std::path::Path,
     session_id: &str,
-    client: &libbrat_grit::GritClient,
+    client: &libbrat_grite::GriteClient,
 ) -> Result<(), BratError> {
     let poll_interval = Duration::from_secs(1);
     let mut last_ref: Option<String> = None;
@@ -349,7 +349,7 @@ fn run_tail_follow(
         }
 
         // Check if session has exited
-        if session.status == libbrat_grit::SessionStatus::Exit {
+        if session.status == libbrat_grite::SessionStatus::Exit {
             if !cli.json && !cli.quiet {
                 println!("\n[session exited]");
             }
@@ -375,10 +375,10 @@ fn read_blob(repo_root: &std::path::Path, blob_ref: &str) -> Result<String, Brat
         .args(["cat-file", "blob", hash])
         .current_dir(repo_root)
         .output()
-        .map_err(|e| BratError::GritCommandFailed(format!("failed to read blob: {}", e)))?;
+        .map_err(|e| BratError::GriteCommandFailed(format!("failed to read blob: {}", e)))?;
 
     if !output.status.success() {
-        return Err(BratError::GritCommandFailed(format!(
+        return Err(BratError::GriteCommandFailed(format!(
             "blob not found: {}",
             String::from_utf8_lossy(&output.stderr)
         )));

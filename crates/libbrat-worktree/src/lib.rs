@@ -9,7 +9,7 @@
 //! ```ignore
 //! use libbrat_worktree::WorktreeManager;
 //!
-//! let manager = WorktreeManager::new("/path/to/repo", ".grit/worktrees", 6);
+//! let manager = WorktreeManager::new("/path/to/repo", ".grite/worktrees", 6);
 //!
 //! // Create a worktree for a session
 //! let path = manager.create("s-20250117-a2f9")?;

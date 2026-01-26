@@ -4,7 +4,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use libbrat_grit::SessionStatus;
+use libbrat_grite::SessionStatus;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
@@ -17,7 +17,7 @@ use super::status::ErrorResponse;
 pub struct SessionResponse {
     pub session_id: String,
     pub task_id: String,
-    pub grit_issue_id: String,
+    pub grite_issue_id: String,
     pub engine: String,
     pub status: String,
     pub pid: Option<u32>,
@@ -71,7 +71,7 @@ async fn list_sessions(
     })?;
 
     let sessions = ctx
-        .grit
+        .grite
         .session_list(query.task.as_deref())
         .map_err(|e| {
             (
@@ -87,7 +87,7 @@ async fn list_sessions(
         .map(|s| SessionResponse {
             session_id: s.session_id,
             task_id: s.task_id,
-            grit_issue_id: s.grit_issue_id,
+            grite_issue_id: s.grite_issue_id,
             engine: s.engine,
             status: session_status_to_string(s.status),
             pid: s.pid,
@@ -120,7 +120,7 @@ async fn get_session(
     })?;
 
     // List sessions and find the one with matching ID
-    let sessions = ctx.grit.session_list(None).map_err(|e| {
+    let sessions = ctx.grite.session_list(None).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -144,7 +144,7 @@ async fn get_session(
     Ok(Json(SessionResponse {
         session_id: session.session_id,
         task_id: session.task_id,
-        grit_issue_id: session.grit_issue_id,
+        grite_issue_id: session.grite_issue_id,
         engine: session.engine,
         status: session_status_to_string(session.status),
         pid: session.pid,
@@ -175,7 +175,7 @@ async fn stop_session(
     })?;
 
     // Use session_exit with exit code -1 to indicate user stop
-    ctx.grit
+    ctx.grite
         .session_exit(&session_id, -1, &req.reason, None)
         .map_err(|e| {
             (
@@ -251,7 +251,7 @@ async fn get_session_logs(
     })?;
 
     // Find the session
-    let sessions = ctx.grit.session_list(None).map_err(|e| {
+    let sessions = ctx.grite.session_list(None).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {

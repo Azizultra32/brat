@@ -4,7 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 description = "Git worktree management for Brat polecat sessions"
+readme = "../../README.md"
 
 [dependencies]
 thiserror.workspace = true

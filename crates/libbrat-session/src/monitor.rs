@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use libbrat_engine::{Engine, SessionHandle, SpawnSpec, StopMode};
-use libbrat_grit::{
-    generate_session_id, GritClient, SessionRole, SessionStatus, SessionType, StateMachine,
+use libbrat_grite::{
+    generate_session_id, GriteClient, SessionRole, SessionStatus, SessionType, StateMachine,
 };
 use libbrat_worktree::WorktreeManager;
 use tokio::sync::{broadcast, mpsc, watch, RwLock};
@@ -51,8 +51,8 @@ pub struct SessionMonitor<E: Engine + 'static> {
     engine: Arc<E>,
     /// Engine name for Grit recording.
     engine_name: String,
-    /// Grit client for session persistence.
-    grit: Arc<GritClient>,
+    /// Grite client for session persistence.
+    grite: Arc<GriteClient>,
     /// Worktree manager for polecat sessions.
     worktree_manager: Option<Arc<WorktreeManager>>,
     /// Configuration.
@@ -73,13 +73,13 @@ impl<E: Engine + 'static> SessionMonitor<E> {
     /// # Arguments
     ///
     /// * `engine` - Engine for spawning and controlling sessions.
-    /// * `grit` - Grit client for session persistence.
+    /// * `grite` - Grite client for session persistence.
     /// * `worktree_manager` - Optional worktree manager for polecat sessions.
     /// * `config` - Monitor configuration.
     pub fn new(
         engine: E,
         engine_name: impl Into<String>,
-        grit: GritClient,
+        grite: GriteClient,
         worktree_manager: Option<WorktreeManager>,
         config: MonitorConfig,
     ) -> Self {
@@ -89,7 +89,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         Self {
             engine: Arc::new(engine),
             engine_name: engine_name.into(),
-            grit: Arc::new(grit),
+            grite: Arc::new(grite),
             worktree_manager: worktree_manager.map(Arc::new),
             config,
             sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -175,7 +175,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        let _grit_session = match self.grit.session_create_with_id(
+        let _grite_session = match self.grite.session_create_with_id(
             Some(&session_id),
             task_id,
             role,
@@ -276,7 +276,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         command_rx: mpsc::Receiver<MonitorCommand>,
     ) -> JoinHandle<()> {
         let engine = Arc::clone(&self.engine);
-        let grit = Arc::clone(&self.grit);
+        let grite = Arc::clone(&self.grite);
         let worktree_manager = self.worktree_manager.clone();
         let config = self.config.clone();
         let event_tx = self.event_tx.clone();
@@ -286,7 +286,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         tokio::spawn(async move {
             Self::monitor_loop(
                 engine,
-                grit,
+                grite,
                 worktree_manager,
                 config,
                 session_id,
@@ -305,7 +305,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
     /// The actual monitoring loop for a session.
     async fn monitor_loop(
         engine: Arc<E>,
-        grit: Arc<GritClient>,
+        grite: Arc<GriteClient>,
         worktree_manager: Option<Arc<WorktreeManager>>,
         config: MonitorConfig,
         session_id: String,
@@ -338,7 +338,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
 
                             // Auto-transition Spawned -> Ready on first successful health
                             if current_status == SessionStatus::Spawned {
-                                if let Ok(()) = grit.session_update_status(&session_id, SessionStatus::Ready) {
+                                if let Ok(()) = grite.session_update_status(&session_id, SessionStatus::Ready) {
                                     let _ = event_tx.send(MonitorEvent::StateChanged {
                                         session_id: session_id.clone(),
                                         from: SessionStatus::Spawned,
@@ -363,7 +363,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                             let exit_reason = health.exit_reason.unwrap_or_else(|| "unknown".to_string());
 
                             Self::handle_exit(
-                                &grit,
+                                &grite,
                                 &engine,
                                 &engine_handle,
                                 &worktree_manager,
@@ -388,7 +388,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                             if consecutive_failures >= config.max_health_failures {
                                 // Assume dead after too many failures
                                 Self::handle_exit(
-                                    &grit,
+                                    &grite,
                                     &engine,
                                     &engine_handle,
                                     &worktree_manager,
@@ -406,7 +406,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
 
                 // Heartbeat timer
                 _ = heartbeat_interval.tick() => {
-                    if let Err(e) = grit.session_heartbeat(&session_id) {
+                    if let Err(e) = grite.session_heartbeat(&session_id) {
                         let _ = event_tx.send(MonitorEvent::Error {
                             session_id: Some(session_id.clone()),
                             error: format!("heartbeat failed: {}", e),
@@ -423,7 +423,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                     match cmd {
                         MonitorCommand::Transition { new_status, reply } => {
                             let result = Self::do_transition(
-                                &grit,
+                                &grite,
                                 &session_id,
                                 current_status,
                                 new_status,
@@ -450,7 +450,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                         MonitorCommand::Shutdown => {
                             let _ = engine.stop(&engine_handle, StopMode::Graceful).await;
                             Self::handle_exit(
-                                &grit,
+                                &grite,
                                 &engine,
                                 &engine_handle,
                                 &worktree_manager,
@@ -470,7 +470,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                     if *shutdown_rx.borrow() {
                         let _ = engine.stop(&engine_handle, StopMode::Graceful).await;
                         Self::handle_exit(
-                            &grit,
+                            &grite,
                             &engine,
                             &engine_handle,
                             &worktree_manager,
@@ -508,9 +508,9 @@ impl<E: Engine + 'static> SessionMonitor<E> {
 
     /// Handle session exit.
     ///
-    /// Captures the last N lines of output and writes them to `.grit/logs/`.
+    /// Captures the last N lines of output and writes them to `.grite/logs/`.
     async fn handle_exit(
-        grit: &Arc<GritClient>,
+        grite: &Arc<GriteClient>,
         engine: &Arc<E>,
         engine_handle: &SessionHandle,
         _worktree_manager: &Option<Arc<WorktreeManager>>,
@@ -523,7 +523,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         // Capture last N lines of output for observability
         let last_output_ref = match engine.tail(engine_handle, config.exit_output_lines).await {
             Ok(lines) if !lines.is_empty() => {
-                match crate::logs::write_session_logs(grit.repo_root(), session_id, &lines) {
+                match crate::logs::write_session_logs(grite.repo_root(), session_id, &lines) {
                     Ok(hash_ref) => Some(hash_ref),
                     Err(e) => {
                         eprintln!("Warning: Failed to write session logs: {}", e);
@@ -539,7 +539,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         };
 
         // Update Grit with log reference
-        let _ = grit.session_exit(session_id, exit_code, exit_reason, last_output_ref.as_deref());
+        let _ = grite.session_exit(session_id, exit_code, exit_reason, last_output_ref.as_deref());
 
         // Emit event
         let _ = event_tx.send(MonitorEvent::Exited {
@@ -551,7 +551,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
 
     /// Perform a state transition.
     async fn do_transition(
-        grit: &Arc<GritClient>,
+        grite: &Arc<GriteClient>,
         session_id: &str,
         current_status: SessionStatus,
         new_status: SessionStatus,
@@ -564,7 +564,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         }
 
         // Update in Grit
-        grit.session_update_status(session_id, new_status)?;
+        grite.session_update_status(session_id, new_status)?;
 
         // Emit event
         let _ = event_tx.send(MonitorEvent::StateChanged {

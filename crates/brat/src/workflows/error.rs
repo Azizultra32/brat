@@ -1,7 +1,7 @@
 //! Workflow-specific error types.
 
 use libbrat_engine::EngineError;
-use libbrat_grit::GritError;
+use libbrat_grite::GriteError;
 use libbrat_session::SessionMonitorError;
 use libbrat_worktree::WorktreeError;
 use thiserror::Error;
@@ -10,8 +10,8 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum WorkflowError {
     /// Grit operation failed.
-    #[error("grit error: {0}")]
-    Grit(#[from] GritError),
+    #[error("grite error: {0}")]
+    Grit(#[from] GriteError),
 
     /// Session monitor operation failed.
     #[error("session error: {0}")]

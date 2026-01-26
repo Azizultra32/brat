@@ -8,12 +8,13 @@ use std::time::Duration;
 
 use libbrat_config::BratConfig;
 use libbrat_engine::{Engine, SpawnSpec};
-use libbrat_grit::{GritClient, SessionRole, SessionStatus, SessionType, Task, TaskStatus};
+use libbrat_grite::{GriteClient, SessionRole, SessionStatus, SessionType, Task, TaskStatus};
 use libbrat_session::{MonitorConfig, MonitorHandle, SessionMonitor};
 use libbrat_worktree::WorktreeManager;
 use serde::Serialize;
 
 use super::error::WorkflowError;
+use super::events::EventEmitter;
 use super::locks::LockHelper;
 
 /// Configuration for the Witness workflow.
@@ -69,8 +70,8 @@ pub struct WitnessLoopResult {
 pub struct WitnessWorkflow<E: Engine + 'static> {
     /// Configuration.
     config: WitnessConfig,
-    /// Grit client for task/session queries.
-    grit: Arc<GritClient>,
+    /// Grite client for task/session queries.
+    grite: Arc<GriteClient>,
     /// Session monitor for spawning and tracking sessions.
     monitor: SessionMonitor<E>,
     /// Track active sessions by task_id -> session_id.
@@ -79,34 +80,38 @@ pub struct WitnessWorkflow<E: Engine + 'static> {
     lock_helper: LockHelper,
     /// Track acquired locks by session_id -> list of lock resources.
     session_locks: HashMap<String, Vec<String>>,
+    /// Event emitter for broadcasting events to WebSocket clients.
+    event_emitter: EventEmitter,
 }
 
 impl<E: Engine + 'static> WitnessWorkflow<E> {
     /// Create a new WitnessWorkflow.
     pub fn new(
         config: WitnessConfig,
-        grit: GritClient,
+        grite: GriteClient,
         engine: E,
         worktree_manager: Option<WorktreeManager>,
     ) -> Self {
-        let grit = Arc::new(grit);
+        let grite = Arc::new(grite);
         let engine_name = config.engine_command.clone();
         let monitor = SessionMonitor::new(
             engine,
             engine_name,
-            (*grit).clone(),
+            (*grite).clone(),
             worktree_manager,
             config.monitor_config.clone(),
         );
-        let lock_helper = LockHelper::from_config(Arc::clone(&grit), &config.lock_policy);
+        let lock_helper = LockHelper::from_config(Arc::clone(&grite), &config.lock_policy);
+        let event_emitter = EventEmitter::new();
 
         Self {
             config,
-            grit,
+            grite,
             monitor,
             active_sessions: HashMap::new(),
             lock_helper,
             session_locks: HashMap::new(),
+            event_emitter,
         }
     }
 
@@ -160,20 +165,79 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         Ok(result)
     }
 
-    /// Query tasks with status:queued or status:running.
+    /// Query tasks with status:queued or status:running, in topological order.
+    ///
+    /// Tasks are returned in dependency order (ready-to-run first).
+    /// A task is only considered "ready" if all its dependencies are complete (merged/dropped).
     fn query_actionable_tasks(&self) -> Result<Vec<Task>, WorkflowError> {
-        let mut tasks = Vec::new();
+        let mut ready_tasks = Vec::new();
 
-        // Query queued tasks
-        if let Ok(queued) = self.grit.task_list(None) {
-            for task in queued {
-                if task.status == TaskStatus::Queued || task.status == TaskStatus::Running {
-                    tasks.push(task);
+        // Try to get tasks in topological order first
+        let topo_issues = self.grite.task_topo_order(None).unwrap_or_default();
+
+        // Build a set of completed task issue IDs for quick lookup
+        let completed_issue_ids: std::collections::HashSet<String> = self
+            .grite
+            .task_list(None)
+            .unwrap_or_default()
+            .iter()
+            .filter(|t| t.status == TaskStatus::Merged || t.status == TaskStatus::Dropped)
+            .map(|t| t.grite_issue_id.clone())
+            .collect();
+
+        // Filter topologically sorted tasks to queued/running ones
+        for issue in topo_issues {
+            // Skip non-task issues
+            if !issue.labels.iter().any(|l| l == "type:task") {
+                continue;
+            }
+
+            // Check if this is queued or running by parsing labels
+            let is_actionable = issue.labels.iter().any(|l| {
+                l == TaskStatus::Queued.as_label() || l == TaskStatus::Running.as_label()
+            });
+
+            if !is_actionable {
+                continue;
+            }
+
+            // Check if all dependencies are complete
+            let deps = self
+                .grite
+                .task_dep_list(&issue.issue_id, false)
+                .unwrap_or_default();
+
+            let all_deps_complete = deps.iter().all(|dep| {
+                completed_issue_ids.contains(&dep.issue_id)
+            });
+
+            if !all_deps_complete && !deps.is_empty() {
+                // This task has uncompleted dependencies, skip it
+                continue;
+            }
+
+            // Get full task details
+            if let Some(task_id) = issue.labels.iter().find_map(|l| l.strip_prefix("task:")) {
+                if let Ok(task) = self.grite.task_get(task_id) {
+                    if task.status == TaskStatus::Queued || task.status == TaskStatus::Running {
+                        ready_tasks.push(task);
+                    }
                 }
             }
         }
 
-        Ok(tasks)
+        // If topological order failed or returned empty, fall back to regular list
+        if ready_tasks.is_empty() {
+            if let Ok(queued) = self.grite.task_list(None) {
+                for task in queued {
+                    if task.status == TaskStatus::Queued || task.status == TaskStatus::Running {
+                        ready_tasks.push(task);
+                    }
+                }
+            }
+        }
+
+        Ok(ready_tasks)
     }
 
     /// Check if a task already has an active session.
@@ -184,7 +248,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         }
 
         // Query Grit for active sessions on this task
-        if let Ok(sessions) = self.grit.session_list(Some(task_id)) {
+        if let Ok(sessions) = self.grite.session_list(Some(task_id)) {
             return sessions.iter().any(|s| s.status != SessionStatus::Exit);
         }
 
@@ -196,7 +260,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         // For AI engines, fetch full task to get body (task_list doesn't include body)
         let is_ai_engine = matches!(self.config.engine_command.as_str(), "codex" | "claude");
         let full_task = if is_ai_engine && task.body.is_empty() {
-            self.grit.task_get(&task.task_id)?
+            self.grite.task_get(&task.task_id)?
         } else {
             task.clone()
         };
@@ -265,12 +329,26 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
             "Witness spawned polecat session `{}` for this task.{}",
             session_id, lock_info
         );
-        self.grit.issue_comment(&task.grit_issue_id, &comment)?;
+        self.grite.issue_comment(&task.grite_issue_id, &comment)?;
+
+        // Emit session started event
+        self.event_emitter.session_started(
+            &session_id,
+            &task.task_id,
+            &self.config.engine_command,
+        );
 
         // Update task status to Running if it was Queued
         if task.status == TaskStatus::Queued {
-            self.grit
+            self.grite
                 .task_update_status(&task.task_id, TaskStatus::Running)?;
+
+            // Emit task updated event
+            self.event_emitter.task_updated(
+                &task.task_id,
+                "running",
+                Some(&task.convoy_id),
+            );
         }
 
         Ok(session_id)
@@ -283,12 +361,22 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
         for session_id in tracked_sessions {
             // Check if session still exists and is active
-            let is_active = match self.grit.session_get(&session_id) {
+            let session_info = self.grite.session_get(&session_id);
+            let is_active = match &session_info {
                 Ok(session) => session.status != SessionStatus::Exit,
                 Err(_) => false, // Session not found, treat as exited
             };
 
             if !is_active {
+                // Emit session exited event
+                if let Ok(session) = session_info {
+                    self.event_emitter.session_exited(
+                        &session_id,
+                        &session.task_id,
+                        session.exit_code.unwrap_or(-1),
+                    );
+                }
+
                 // Session has exited, release its locks
                 if let Some(locks) = self.session_locks.remove(&session_id) {
                     self.lock_helper.release_locks(&locks);

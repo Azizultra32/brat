@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/libbrat-engine",
     "crates/libbrat-config",
-    "crates/libbrat-grit",
+    "crates/libbrat-grite",
     "crates/libbrat-worktree",
     "crates/libbrat-session",
     "crates/libbrat-workflow",
@@ -15,6 +15,11 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 rust-version = "1.75"
+repository = "https://github.com/neul-labs/brat"
+homepage = "https://github.com/neul-labs/brat"
+documentation = "https://docs.neullabs.com/brat"
+keywords = ["ai", "agents", "cli", "automation", "coding"]
+categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 thiserror = "1.0"
@@ -32,17 +37,18 @@ toml = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 nix = { version = "0.29", features = ["signal"] }
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 base64 = "0.22"
 serde_yaml = "0.9"
+futures-util = "0.3"
 
 # Internal crates
-libbrat-engine = { path = "crates/libbrat-engine" }
-libbrat-config = { path = "crates/libbrat-config" }
-libbrat-grit = { path = "crates/libbrat-grit" }
-libbrat-worktree = { path = "crates/libbrat-worktree" }
-libbrat-session = { path = "crates/libbrat-session" }
-libbrat-workflow = { path = "crates/libbrat-workflow" }
+libbrat-engine = { version = "0.1.0", path = "crates/libbrat-engine" }
+libbrat-config = { version = "0.1.0", path = "crates/libbrat-config" }
+libbrat-grite = { version = "0.1.0", path = "crates/libbrat-grite" }
+libbrat-worktree = { version = "0.1.0", path = "crates/libbrat-worktree" }
+libbrat-session = { version = "0.1.0", path = "crates/libbrat-session" }
+libbrat-workflow = { version = "0.1.0", path = "crates/libbrat-workflow" }

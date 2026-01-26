@@ -2,6 +2,13 @@
 name = "libbrat-config"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Configuration management for Brat"
+readme = "../../README.md"
 
 [dependencies]
 serde.workspace = true

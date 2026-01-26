@@ -1,3 +1,4 @@
+mod agents_md;
 mod api;
 mod cli;
 mod commands;
@@ -33,6 +34,7 @@ fn should_auto_start_daemon(cmd: &Command) -> bool {
         Command::Status(_)
             | Command::Convoy(_)
             | Command::Task(_)
+            | Command::Context(_)
             | Command::Session(_)
             | Command::Mayor(_)
             | Command::Witness(_)
@@ -57,6 +59,7 @@ async fn run_command(cli: &Cli) -> Result<(), BratError> {
         Command::Status(args) => commands::status::run(cli, args),
         Command::Convoy(cmd) => commands::convoy::run(cli, cmd),
         Command::Task(cmd) => commands::task::run(cli, cmd),
+        Command::Context(cmd) => commands::context::run(cli, cmd),
         Command::Witness(cmd) => commands::witness::run(cli, cmd).await,
         Command::Refinery(cmd) => commands::refinery::run(cli, cmd).await,
         Command::Session(cmd) => commands::session::run(cli, cmd),

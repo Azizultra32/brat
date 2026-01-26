@@ -1,8 +1,127 @@
 use serde::{Deserialize, Serialize};
 
-/// A Grit issue as returned by `grit issue show --json`.
+// =============================================================================
+// Dependency Types (for grite issue dep commands)
+// =============================================================================
+
+/// Type of dependency relationship between issues/tasks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DependencyType {
+    /// This issue blocks the target issue.
+    Blocks,
+    /// This issue depends on the target issue.
+    DependsOn,
+    /// This issue is related to the target issue (non-directional).
+    RelatedTo,
+}
+
+impl DependencyType {
+    /// Convert to string representation.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DependencyType::Blocks => "blocks",
+            DependencyType::DependsOn => "depends_on",
+            DependencyType::RelatedTo => "related_to",
+        }
+    }
+
+    /// Parse from string.
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "blocks" => Some(DependencyType::Blocks),
+            "depends_on" => Some(DependencyType::DependsOn),
+            "related_to" => Some(DependencyType::RelatedTo),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for DependencyType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// A dependency relationship between tasks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GritIssue {
+pub struct TaskDependency {
+    /// The target task's grite issue ID.
+    pub issue_id: String,
+    /// The type of dependency.
+    pub dep_type: DependencyType,
+    /// The target task's title.
+    pub title: String,
+}
+
+// =============================================================================
+// Context Types (for grite context commands)
+// =============================================================================
+
+/// Result of context indexing operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContextIndexResult {
+    /// Number of files successfully indexed.
+    pub indexed: u32,
+    /// Number of files skipped (binary, unchanged, etc.).
+    pub skipped: u32,
+    /// Total number of files processed.
+    pub total_files: u32,
+}
+
+/// A symbol match from context query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SymbolMatch {
+    /// The symbol name.
+    pub symbol: String,
+    /// The file path containing the symbol.
+    pub path: String,
+}
+
+/// A symbol extracted from a file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Symbol {
+    /// Symbol name.
+    pub name: String,
+    /// Symbol kind (function, class, struct, etc.).
+    pub kind: String,
+    /// Starting line number.
+    pub line_start: u32,
+    /// Ending line number.
+    pub line_end: u32,
+}
+
+/// File context information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileContext {
+    /// File path.
+    pub path: String,
+    /// Detected programming language.
+    pub language: String,
+    /// AI-generated summary of the file.
+    pub summary: String,
+    /// Content hash (SHA256 hex).
+    pub content_hash: String,
+    /// Extracted symbols.
+    pub symbols: Vec<Symbol>,
+}
+
+/// Project context key-value entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectContextEntry {
+    /// The key.
+    pub key: String,
+    /// The value.
+    pub value: String,
+}
+
+// =============================================================================
+// Grit Issue Types
+// =============================================================================
+
+/// A Grit issue as returned by `grite issue show --json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GriteIssue {
     pub issue_id: String,
     pub title: String,
     #[serde(default)]
@@ -17,7 +136,7 @@ pub struct GritIssue {
 
 /// Summary of a Grit issue from list command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GritIssueSummary {
+pub struct GriteIssueSummary {
     pub issue_id: String,
     pub title: String,
     #[serde(default)]
@@ -316,7 +435,7 @@ pub struct Session {
     pub task_id: String,
 
     /// Grit issue ID of the parent task.
-    pub grit_issue_id: String,
+    pub grite_issue_id: String,
 
     /// Role executing the session.
     pub role: SessionRole,
@@ -360,7 +479,7 @@ pub struct Convoy {
     pub convoy_id: String,
 
     /// Grit's internal issue ID.
-    pub grit_issue_id: String,
+    pub grite_issue_id: String,
 
     /// Convoy title.
     pub title: String,
@@ -380,7 +499,7 @@ pub struct Task {
     pub task_id: String,
 
     /// Grit's internal issue ID.
-    pub grit_issue_id: String,
+    pub grite_issue_id: String,
 
     /// Parent convoy ID.
     pub convoy_id: String,
@@ -510,7 +629,7 @@ mod tests {
     fn test_task_parse_paths() {
         let task = Task {
             task_id: "t-20250117-test".to_string(),
-            grit_issue_id: "issue-123".to_string(),
+            grite_issue_id: "issue-123".to_string(),
             convoy_id: "c-20250117-test".to_string(),
             title: "Test task".to_string(),
             body: "Some description\n\nPaths: src/main.rs, src/lib.rs, tests/\n\nMore text".to_string(),
@@ -525,7 +644,7 @@ mod tests {
     fn test_task_parse_paths_empty() {
         let task = Task {
             task_id: "t-20250117-test".to_string(),
-            grit_issue_id: "issue-123".to_string(),
+            grite_issue_id: "issue-123".to_string(),
             convoy_id: "c-20250117-test".to_string(),
             title: "Test task".to_string(),
             body: "Some description without paths".to_string(),
@@ -540,7 +659,7 @@ mod tests {
     fn test_task_parse_paths_single() {
         let task = Task {
             task_id: "t-20250117-test".to_string(),
-            grit_issue_id: "issue-123".to_string(),
+            grite_issue_id: "issue-123".to_string(),
             convoy_id: "c-20250117-test".to_string(),
             title: "Test task".to_string(),
             body: "Paths: src/single.rs".to_string(),
@@ -549,5 +668,24 @@ mod tests {
 
         let paths = task.parse_paths();
         assert_eq!(paths, vec!["src/single.rs"]);
+    }
+
+    #[test]
+    fn test_dependency_type_roundtrip() {
+        for dep_type in [
+            DependencyType::Blocks,
+            DependencyType::DependsOn,
+            DependencyType::RelatedTo,
+        ] {
+            let s = dep_type.as_str();
+            let parsed = DependencyType::from_str(s);
+            assert_eq!(parsed, Some(dep_type));
+        }
+    }
+
+    #[test]
+    fn test_dependency_type_invalid() {
+        assert_eq!(DependencyType::from_str("invalid"), None);
+        assert_eq!(DependencyType::from_str(""), None);
     }
 }

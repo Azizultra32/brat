@@ -4,12 +4,14 @@
 //! as well as the reconciliation workflow for crash recovery.
 
 mod error;
+mod events;
 mod locks;
 mod reconcile;
 mod refinery;
 mod witness;
 
 pub use error::WorkflowError;
+pub use events::EventEmitter;
 pub use locks::{LockHelper, LockPolicy};
 pub use reconcile::{ReconcileResult, ReconcileWorkflow};
 pub use refinery::{RefineryConfig, RefineryLoopResult, RefineryWorkflow};

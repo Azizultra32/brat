@@ -9,7 +9,7 @@ use crate::context::BratContext;
 use crate::error::BratError;
 use crate::output::{output_success, print_human};
 
-/// Lock info from Grit.
+/// Lock info from Grite.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LockInfo {
     /// Resource being locked.
@@ -89,22 +89,22 @@ pub fn run(cli: &Cli, cmd: &LockCommand) -> Result<(), BratError> {
 /// Run the lock status command.
 fn run_status(cli: &Cli, args: &LockStatusArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
-    ctx.require_grit_initialized()?;
+    ctx.require_grite_initialized()?;
 
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
-    // Shell out to grit lock status --json
-    let grit_output = Command::new("grit")
+    // Shell out to grite lock status --json
+    let grite_output = Command::new("grite")
         .args(["lock", "status", "--json"])
         .current_dir(&ctx.repo_root)
         .output();
 
     let mut output = LockStatusOutput::default();
 
-    match grit_output {
+    match grite_output {
         Ok(result) if result.status.success() => {
             let stdout = String::from_utf8_lossy(&result.stdout);
 
@@ -132,10 +132,10 @@ fn run_status(cli: &Cli, args: &LockStatusArgs) -> Result<(), BratError> {
             }
         }
         Ok(result) => {
-            // Command failed, likely grit doesn't support lock status yet
+            // Command failed, likely grite doesn.t support lock status yet
             let stderr = String::from_utf8_lossy(&result.stderr);
             if !cli.quiet {
-                eprintln!("Note: grit lock status not available: {}", stderr.trim());
+                eprintln!("Note: grite lock status not available: {}", stderr.trim());
             }
         }
         Err(e) => {

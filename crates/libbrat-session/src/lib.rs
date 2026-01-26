@@ -1,6 +1,6 @@
 //! Session lifecycle management for Brat.
 //!
-//! This crate bridges libbrat-engine, libbrat-grit, and libbrat-worktree to
+//! This crate bridges libbrat-engine, libbrat-grite, and libbrat-worktree to
 //! provide coordinated session lifecycle management. It enables:
 //!
 //! - Atomic spawn (worktree + process + Grit session)
@@ -15,8 +15,8 @@
 //! use libbrat_engine::ShellEngine;
 //!
 //! let engine = ShellEngine::new();
-//! let grit = GritClient::new("/path/to/repo");
-//! let monitor = SessionMonitor::new(engine, "shell", grit, None, MonitorConfig::default());
+//! let grite = GriteClient::new("/path/to/repo");
+//! let monitor = SessionMonitor::new(engine, "shell", grite, None, MonitorConfig::default());
 //!
 //! // Spawn a session
 //! let handle = monitor.spawn_session(

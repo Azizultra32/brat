@@ -5,7 +5,7 @@
 //! - Lock policy is respected (off/warn/require)
 //! - Locks are released properly
 //!
-//! Note: This test uses grit CLI directly for lock operations since
+//! Note: This test uses grite CLI directly for lock operations since
 //! brat integrates locks internally in the workflow.
 
 use serde::Deserialize;
@@ -49,7 +49,7 @@ fn test_lock_status_no_locks() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Check output indicates no locks
-    // (exact format depends on whether grit supports lock status)
+    // (exact format depends on whether grite supports lock status)
     assert!(
         stdout.contains("No active locks") || stdout.contains("locks") || output.status.success(),
         "lock status should succeed"
@@ -60,23 +60,23 @@ fn test_lock_status_no_locks() {
 }
 
 #[test]
-fn test_grit_lock_acquire_release() {
+fn test_grite_lock_acquire_release() {
     let repo = TestRepo::new();
 
-    // Acquire a lock using grit directly
-    let acquire_output = repo.grit(&["lock", "acquire", "--resource", "path:src/main.rs", "--ttl", "60000"]);
+    // Acquire a lock using grite directly
+    let acquire_output = repo.grite(&["lock", "acquire", "--resource", "path:src/main.rs", "--ttl", "60000"]);
 
-    // Check if grit supports locks (may not be implemented yet)
+    // Check if grite supports locks (may not be implemented yet)
     if !acquire_output.status.success() {
         let stderr = String::from_utf8_lossy(&acquire_output.stderr);
         if stderr.contains("unknown") || stderr.contains("not found") {
-            println!("Skipping lock test - grit lock commands not available");
+            println!("Skipping lock test - grite lock commands not available");
             return;
         }
         // Try with alternative syntax
-        let acquire_output = repo.grit(&["lock", "acquire", "path:src/main.rs", "--ttl", "60000"]);
+        let acquire_output = repo.grite(&["lock", "acquire", "path:src/main.rs", "--ttl", "60000"]);
         if !acquire_output.status.success() {
-            println!("Skipping lock test - grit lock acquire failed");
+            println!("Skipping lock test - grite lock acquire failed");
             return;
         }
     }
@@ -91,7 +91,7 @@ fn test_grit_lock_acquire_release() {
     }
 
     // Release the lock
-    let release_output = repo.grit(&["lock", "release", "--resource", "path:src/main.rs"]);
+    let release_output = repo.grite(&["lock", "release", "--resource", "path:src/main.rs"]);
     if release_output.status.success() {
         println!("Lock released successfully");
     }

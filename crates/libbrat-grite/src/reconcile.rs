@@ -1,15 +1,15 @@
 //! Session reconciliation for crash recovery.
 //!
 //! This module provides functions to reconcile the expected session state
-//! (from Grit) with the actual state (from the engine). This is used during
+//! (from Grite) with the actual state (from the engine). This is used during
 //! harness startup and periodic health sweeps to detect and recover from
 //! crashed sessions.
 
 use std::collections::{HashMap, HashSet};
 
 use crate::types::{Session, SessionStatus};
-use crate::GritClient;
-use crate::GritError;
+use crate::GriteClient;
+use crate::GriteError;
 
 /// Action to take for reconciliation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +22,7 @@ pub enum ReconciliationAction {
     /// Session exists in Grit but not in engine - mark as crashed.
     MarkCrashed {
         session_id: String,
-        grit_issue_id: String,
+        grite_issue_id: String,
         task_id: String,
     },
 
@@ -79,28 +79,28 @@ pub struct EngineSessionInfo {
     pub exit_code: Option<i32>,
 }
 
-/// Reconcile Grit state with engine state.
+/// Reconcile Grite state with engine state.
 ///
 /// This compares the sessions recorded in Grit with the sessions running
 /// in the engine and returns a list of actions to bring them in sync.
 ///
 /// # Arguments
 ///
-/// * `grit_client` - Client for querying Grit state
+/// * `grite_client` - Client for querying Gritee state
 /// * `engine_sessions` - Current sessions from the engine
 ///
 /// # Returns
 ///
 /// A `ReconciliationResult` with the list of actions to take.
 pub fn reconcile_sessions(
-    grit_client: &GritClient,
+    grite_client: &GriteClient,
     engine_sessions: &[EngineSessionInfo],
-) -> Result<ReconciliationResult, GritError> {
+) -> Result<ReconciliationResult, GriteError> {
     let mut result = ReconciliationResult::default();
 
-    // Step 1: Get all active sessions from Grit (not in Exit state)
-    let grit_sessions = grit_client.session_list(None)?;
-    let grit_active: HashMap<String, Session> = grit_sessions
+    // Step 1: Get all active sessions from Grite (not in Exit state)
+    let grite_sessions = grite_client.session_list(None)?;
+    let grite_active: HashMap<String, Session> = grite_sessions
         .into_iter()
         .filter(|s| s.status != SessionStatus::Exit)
         .map(|s| (s.session_id.clone(), s))
@@ -113,7 +113,7 @@ pub fn reconcile_sessions(
         .collect();
 
     // Step 3: Check sessions in Grit
-    for (session_id, session) in &grit_active {
+    for (session_id, session) in &grite_active {
         if let Some(engine_info) = engine_sessions.iter().find(|e| e.session_id == *session_id) {
             // Session exists in both - check if alive
             if engine_info.alive {
@@ -126,7 +126,7 @@ pub fn reconcile_sessions(
                 // Engine says dead but Grit shows active - mark crashed
                 result.actions.push(ReconciliationAction::MarkCrashed {
                     session_id: session_id.clone(),
-                    grit_issue_id: session.grit_issue_id.clone(),
+                    grite_issue_id: session.grite_issue_id.clone(),
                     task_id: session.task_id.clone(),
                 });
                 result.crashed_count += 1;
@@ -135,7 +135,7 @@ pub fn reconcile_sessions(
             // Session in Grit but not in engine - crashed
             result.actions.push(ReconciliationAction::MarkCrashed {
                 session_id: session_id.clone(),
-                grit_issue_id: session.grit_issue_id.clone(),
+                grite_issue_id: session.grite_issue_id.clone(),
                 task_id: session.task_id.clone(),
             });
             result.crashed_count += 1;
@@ -144,7 +144,7 @@ pub fn reconcile_sessions(
 
     // Step 4: Check for orphaned sessions (in engine but not in Grit)
     for engine_info in engine_sessions {
-        if !grit_active.contains_key(&engine_info.session_id) {
+        if !grite_active.contains_key(&engine_info.session_id) {
             result.actions.push(ReconciliationAction::Orphaned {
                 session_id: engine_info.session_id.clone(),
             });
@@ -157,27 +157,27 @@ pub fn reconcile_sessions(
 
 /// Execute reconciliation actions.
 ///
-/// This applies the reconciliation actions to update Grit state.
+/// This applies the reconciliation actions to update Grite state.
 ///
 /// # Arguments
 ///
-/// * `grit_client` - Client for updating Grit state
+/// * `grite_client` - Client for updating Gritee state
 /// * `actions` - Actions to execute
 ///
 /// # Returns
 ///
 /// Number of successful actions, and any errors encountered.
 pub fn execute_reconciliation(
-    grit_client: &GritClient,
+    grite_client: &GriteClient,
     actions: &[ReconciliationAction],
-) -> (usize, Vec<GritError>) {
+) -> (usize, Vec<GriteError>) {
     let mut success_count = 0;
     let mut errors = Vec::new();
 
     for action in actions {
         match action {
             ReconciliationAction::MarkCrashed { session_id, .. } => {
-                match grit_client.session_exit(session_id, -1, "crash", None) {
+                match grite_client.session_exit(session_id, -1, "crash", None) {
                     Ok(()) => success_count += 1,
                     Err(e) => errors.push(e),
                 }
@@ -188,7 +188,7 @@ pub fn execute_reconciliation(
                 ..
             } => {
                 // Force update since we're reconciling
-                match grit_client.session_update_status_with_options(session_id, *new_status, true)
+                match grite_client.session_update_status_with_options(session_id, *new_status, true)
                 {
                     Ok(()) => success_count += 1,
                     Err(e) => errors.push(e),

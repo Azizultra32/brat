@@ -123,3 +123,66 @@ export interface CreateTaskRequest {
 export interface UpdateTaskRequest {
   status: string;
 }
+
+// WebSocket event types (from backend BratEvent enum)
+export type BratEventType =
+  | 'TaskUpdated'
+  | 'SessionStarted'
+  | 'SessionExited'
+  | 'MergeCompleted'
+  | 'MergeFailed'
+  | 'MergeRolledBack'
+  | 'MergeRetryScheduled';
+
+// WebSocket event data payloads
+export interface TaskUpdatedData {
+  task_id: string;
+  status: string;
+  convoy_id: string | null;
+}
+
+export interface SessionStartedData {
+  session_id: string;
+  task_id: string;
+  engine: string;
+}
+
+export interface SessionExitedData {
+  session_id: string;
+  task_id: string;
+  exit_code: number;
+}
+
+export interface MergeCompletedData {
+  task_id: string;
+  commit_sha: string;
+  branch: string;
+}
+
+export interface MergeFailedData {
+  task_id: string;
+  error: string;
+  attempt: number;
+}
+
+export interface MergeRolledBackData {
+  task_id: string;
+  reset_sha: string;
+  reason: string;
+}
+
+export interface MergeRetryScheduledData {
+  task_id: string;
+  retry_at: string;
+  attempt: number;
+}
+
+// Union type for all event data
+export type BratEventData =
+  | { type: 'TaskUpdated'; data: TaskUpdatedData }
+  | { type: 'SessionStarted'; data: SessionStartedData }
+  | { type: 'SessionExited'; data: SessionExitedData }
+  | { type: 'MergeCompleted'; data: MergeCompletedData }
+  | { type: 'MergeFailed'; data: MergeFailedData }
+  | { type: 'MergeRolledBack'; data: MergeRolledBackData }
+  | { type: 'MergeRetryScheduled'; data: MergeRetryScheduledData };

@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use libbrat_grit::GritClient;
+use libbrat_grite::GriteClient;
 
 use super::error::WorkflowError;
 
@@ -40,20 +40,20 @@ impl Default for LockPolicy {
 
 /// Helper for policy-aware lock acquisition and release.
 pub struct LockHelper {
-    grit: Arc<GritClient>,
+    grite: Arc<GriteClient>,
     policy: LockPolicy,
 }
 
 impl LockHelper {
     /// Create a new LockHelper.
-    pub fn new(grit: Arc<GritClient>, policy: LockPolicy) -> Self {
-        Self { grit, policy }
+    pub fn new(grite: Arc<GriteClient>, policy: LockPolicy) -> Self {
+        Self { grite, policy }
     }
 
     /// Create a LockHelper from config policy string.
-    pub fn from_config(grit: Arc<GritClient>, policy_str: &str) -> Self {
+    pub fn from_config(grite: Arc<GriteClient>, policy_str: &str) -> Self {
         let policy = LockPolicy::from_str(policy_str).unwrap_or_default();
-        Self::new(grit, policy)
+        Self::new(grite, policy)
     }
 
     /// Get the current lock policy.
@@ -87,7 +87,7 @@ impl LockHelper {
         let mut acquired = Vec::new();
 
         for resource in resources {
-            match self.grit.lock_acquire(resource, ttl_ms) {
+            match self.grite.lock_acquire(resource, ttl_ms) {
                 Ok(result) if result.acquired => {
                     acquired.push(resource.clone());
                 }
@@ -134,7 +134,7 @@ impl LockHelper {
     /// cause the overall operation to fail.
     pub fn release_locks(&self, resources: &[String]) {
         for resource in resources {
-            if let Err(e) = self.grit.lock_release(resource) {
+            if let Err(e) = self.grite.lock_release(resource) {
                 eprintln!("Warning: Failed to release lock on {}: {}", resource, e);
             }
         }

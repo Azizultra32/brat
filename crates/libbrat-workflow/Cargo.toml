@@ -2,9 +2,16 @@
 name = "libbrat-workflow"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Workflow templates and execution for Brat"
+readme = "../../README.md"
 
 [dependencies]
-libbrat-grit.workspace = true
+libbrat-grite.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = "0.9"
 thiserror.workspace = true

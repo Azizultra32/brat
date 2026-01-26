@@ -212,7 +212,7 @@ branch refs/heads/main
 HEAD abc123def456
 branch refs/heads/main
 
-worktree /home/user/repo/.grit/worktrees/s-20250117-a2f9
+worktree /home/user/repo/.grite/worktrees/s-20250117-a2f9
 HEAD def456abc123
 detached
 "#;
@@ -225,7 +225,7 @@ detached
 
         assert_eq!(
             entries[1].path,
-            PathBuf::from("/home/user/repo/.grit/worktrees/s-20250117-a2f9")
+            PathBuf::from("/home/user/repo/.grite/worktrees/s-20250117-a2f9")
         );
         assert!(entries[1].detached);
         assert!(entries[1].branch.is_none());
@@ -233,7 +233,7 @@ detached
 
     #[test]
     fn test_parse_porcelain_with_locked() {
-        let output = r#"worktree /home/user/repo/.grit/worktrees/test
+        let output = r#"worktree /home/user/repo/.grite/worktrees/test
 HEAD abc123
 detached
 locked

@@ -38,8 +38,8 @@ pub enum WorkflowError {
     UnknownStep(String),
 
     /// Failed to create convoy/task in Grit.
-    #[error("grit error: {0}")]
-    GritError(#[from] libbrat_grit::GritError),
+    #[error("grite error: {0}")]
+    GriteError(#[from] libbrat_grite::GriteError),
 
     /// Workflow directory not found.
     #[error("workflow directory not found: {0}")]

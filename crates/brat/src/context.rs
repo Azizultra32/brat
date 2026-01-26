@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use libbrat_config::BratConfig;
 use libbrat_engine::Engine;
-use libbrat_grit::GritClient;
+use libbrat_grite::GriteClient;
 use libbrat_session::{MonitorConfig, SessionMonitor};
 use libbrat_worktree::WorktreeManager;
 
@@ -78,22 +78,22 @@ impl BratContext {
     }
 
     /// Check if Grit is initialized in this repository.
-    pub fn is_grit_initialized(&self) -> bool {
-        self.git_dir.join("grit").exists()
+    pub fn is_grite_initialized(&self) -> bool {
+        self.git_dir.join("grite").exists()
     }
 
     /// Require that Grit is initialized.
-    pub fn require_grit_initialized(&self) -> Result<(), BratError> {
-        if self.is_grit_initialized() {
+    pub fn require_grite_initialized(&self) -> Result<(), BratError> {
+        if self.is_grite_initialized() {
             Ok(())
         } else {
-            Err(BratError::GritNotInitialized)
+            Err(BratError::GriteNotInitialized)
         }
     }
 
-    /// Create a GritClient for this repository.
-    pub fn grit_client(&self) -> GritClient {
-        GritClient::new(&self.repo_root)
+    /// Create a GriteClient for this repository.
+    pub fn grite_client(&self) -> GriteClient {
+        GriteClient::new(&self.repo_root)
     }
 
     /// Create a WorktreeManager for this repository.
@@ -110,7 +110,7 @@ impl BratContext {
 
     /// Create a SessionMonitor for this repository.
     ///
-    /// The SessionMonitor coordinates engine processes with Grit sessions
+    /// The SessionMonitor coordinates engine processes with Grite sessions
     /// and optional worktree isolation.
     ///
     /// # Arguments
@@ -128,13 +128,13 @@ impl BratContext {
         monitor_config: MonitorConfig,
     ) -> Result<SessionMonitor<E>, BratError> {
         let _brat_config = self.require_initialized()?;
-        let grit = self.grit_client();
+        let grite = self.grite_client();
         let worktree_manager = self.worktree_manager().ok();
 
         Ok(SessionMonitor::new(
             engine,
             engine_name,
-            grit,
+            grite,
             worktree_manager,
             monitor_config,
         ))

@@ -56,7 +56,7 @@ pub struct WorktreeManager {
     /// Path to the repository root.
     #[allow(dead_code)]
     repo_root: PathBuf,
-    /// Root directory for worktrees (e.g., `.grit/worktrees`).
+    /// Root directory for worktrees (e.g., `.grite/worktrees`).
     worktree_root: PathBuf,
     /// Maximum number of polecat worktrees allowed.
     max_polecats: u32,
@@ -70,7 +70,7 @@ impl WorktreeManager {
     /// # Arguments
     ///
     /// * `repo_root` - Path to the repository root.
-    /// * `worktree_root` - Relative path for worktrees (e.g., `.grit/worktrees`).
+    /// * `worktree_root` - Relative path for worktrees (e.g., `.grite/worktrees`).
     /// * `max_polecats` - Maximum number of concurrent polecat worktrees.
     pub fn new(
         repo_root: impl Into<PathBuf>,
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn test_extract_session_id_from_path() {
         assert_eq!(
-            extract_session_id_from_path(Path::new("/repo/.grit/worktrees/s-20250117-a2f9")),
+            extract_session_id_from_path(Path::new("/repo/.grite/worktrees/s-20250117-a2f9")),
             Some("s-20250117-a2f9".to_string())
         );
         assert_eq!(
@@ -299,7 +299,7 @@ mod tests {
             Some("s-20250117-a2f9".to_string())
         );
         assert_eq!(
-            extract_session_id_from_path(Path::new("/repo/.grit/worktrees/not-a-session")),
+            extract_session_id_from_path(Path::new("/repo/.grite/worktrees/not-a-session")),
             None
         );
         assert_eq!(extract_session_id_from_path(Path::new("/repo")), None);

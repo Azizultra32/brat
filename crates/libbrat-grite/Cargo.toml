@@ -1,10 +1,14 @@
 [package]
-name = "libbrat-grit"
+name = "libbrat-grite"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Grit integration library for Brat"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Grite integration library for Brat"
+readme = "../../README.md"
 
 [dependencies]
 serde.workspace = true

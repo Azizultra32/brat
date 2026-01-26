@@ -2,6 +2,13 @@
 name = "libbrat-engine"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Engine adapters for AI coding tools (Claude Code, Aider, Codex, etc.)"
+readme = "../../README.md"
 
 [dependencies]
 thiserror.workspace = true

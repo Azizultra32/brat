@@ -5,6 +5,18 @@ use std::process::{Command, Output};
 
 use tempfile::TempDir;
 
+/// Get the path to the built brat binary.
+fn brat_bin() -> PathBuf {
+    // Use the binary built by cargo in target/debug
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.pop(); // from crates/brat to crates
+    path.pop(); // from crates to repo root
+    path.push("target");
+    path.push("debug");
+    path.push("brat");
+    path
+}
+
 /// A temporary git repository with Brat and Grit initialized.
 pub struct TestRepo {
     pub dir: TempDir,
@@ -37,21 +49,21 @@ impl TestRepo {
         run_cmd_expect(&path, "git", &["add", "."]);
         run_cmd_expect(&path, "git", &["commit", "-m", "Initial commit"]);
 
-        // Initialize grit
-        run_cmd_expect(&path, "grit", &["init"]);
+        // Initialize grite (no daemon, no agents.md for clean testing)
+        run_cmd_expect(&path, "grite", &["init", "--no-daemon", "--no-agents-md"]);
 
-        // Initialize brat (no daemon, no tmux for isolated testing)
-        run_cmd_expect(&path, "brat", &["init", "--no-daemon", "--no-tmux"]);
+        // Initialize brat (no daemon, no tmux, no agents.md for isolated testing)
+        run_cmd_expect(&path, brat_bin().to_str().unwrap(), &["init", "--no-daemon", "--no-tmux", "--no-agents-md"]);
 
-        // Add .brat/ to gitignore so it doesn't show as untracked
-        std::fs::write(path.join(".gitignore"), ".brat/\n").unwrap();
+        // Add .brat/ and AGENTS.md to gitignore so they don't show as untracked
+        std::fs::write(path.join(".gitignore"), ".brat/\nAGENTS.md\n").unwrap();
         run_cmd_expect(&path, "git", &["add", ".gitignore"]);
         run_cmd_expect(&path, "git", &["commit", "-m", "Add .gitignore"]);
 
         Self { dir, path }
     }
 
-    /// Create a new test repository with only git initialized (no grit/brat).
+    /// Create a new test repository with only git initialized (no grite/brat).
     pub fn new_git_only() -> Self {
         let dir = TempDir::new().expect("create temp dir");
         // Create repo in a subdirectory so worktrees can be siblings
@@ -72,9 +84,16 @@ impl TestRepo {
     }
 
     /// Run a brat command and return output.
+    ///
+    /// Automatically adds `--no-daemon` to avoid daemon auto-start in tests.
+    /// Uses the locally built brat binary instead of the one in PATH.
+    /// Sets GRITE_NO_DAEMON=1 to ensure grite commands also skip the daemon.
     pub fn brat(&self, args: &[&str]) -> Output {
-        Command::new("brat")
-            .args(args)
+        let mut full_args = vec!["--no-daemon"];
+        full_args.extend(args);
+        Command::new(brat_bin())
+            .args(&full_args)
+            .env("GRITE_NO_DAEMON", "1")
             .current_dir(&self.path)
             .output()
             .expect("run brat")
@@ -140,21 +159,25 @@ impl TestRepo {
         output
     }
 
-    /// Run a grit command and return output.
-    pub fn grit(&self, args: &[&str]) -> Output {
-        Command::new("grit")
-            .args(args)
+    /// Run a grite command and return output.
+    ///
+    /// Automatically adds `--no-daemon` to avoid IPC timeout issues in tests.
+    pub fn grite(&self, args: &[&str]) -> Output {
+        let mut full_args = vec!["--no-daemon"];
+        full_args.extend(args);
+        Command::new("grite")
+            .args(&full_args)
             .current_dir(&self.path)
             .output()
-            .expect("run grit")
+            .expect("run grite")
     }
 
-    /// Run a grit command and assert it succeeds.
-    pub fn grit_expect(&self, args: &[&str]) -> Output {
-        let output = self.grit(args);
+    /// Run a grite command and assert it succeeds.
+    pub fn grite_expect(&self, args: &[&str]) -> Output {
+        let output = self.grite(args);
         assert!(
             output.status.success(),
-            "grit {:?} failed: {}",
+            "grite {:?} failed: {}",
             args,
             String::from_utf8_lossy(&output.stderr)
         );
@@ -209,9 +232,12 @@ impl TestRepo {
 }
 
 /// Run a command in a directory and return output.
+///
+/// Sets GRITE_NO_DAEMON=1 to ensure all grite/brat commands skip the daemon.
 pub fn run_cmd(dir: &PathBuf, cmd: &str, args: &[&str]) -> Output {
     Command::new(cmd)
         .args(args)
+        .env("GRITE_NO_DAEMON", "1")
         .current_dir(dir)
         .output()
         .unwrap_or_else(|e| panic!("run {} {:?}: {}", cmd, args, e))

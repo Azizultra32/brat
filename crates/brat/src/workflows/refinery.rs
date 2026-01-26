@@ -8,10 +8,11 @@ use std::process::Command;
 use std::sync::Arc;
 
 use libbrat_config::BratConfig;
-use libbrat_grit::{GritClient, Task, TaskStatus};
+use libbrat_grite::{GriteClient, Task, TaskStatus};
 use serde::Serialize;
 
 use super::error::WorkflowError;
+use super::events::EventEmitter;
 use super::locks::LockHelper;
 
 /// Merge status labels.
@@ -20,9 +21,11 @@ pub mod merge_labels {
     pub const RUNNING: &str = "merge:running";
     pub const SUCCEEDED: &str = "merge:succeeded";
     pub const FAILED: &str = "merge:failed";
+    /// Merge failed but will be retried after backoff period.
+    pub const RETRY_PENDING: &str = "merge:retry-pending";
 
     pub fn all() -> &'static [&'static str] {
-        &[QUEUED, RUNNING, SUCCEEDED, FAILED]
+        &[QUEUED, RUNNING, SUCCEEDED, FAILED, RETRY_PENDING]
     }
 }
 
@@ -78,8 +81,32 @@ pub struct RefineryLoopResult {
     pub succeeded: usize,
     /// Number of failed merges.
     pub failed: usize,
+    /// Number of merges rolled back due to push failure.
+    pub rolled_back: usize,
     /// Errors encountered during this iteration.
     pub errors: Vec<String>,
+}
+
+/// Retry metadata for a task.
+#[derive(Debug, Clone)]
+struct RetryInfo {
+    /// When the retry is scheduled for (Unix timestamp in seconds).
+    retry_at: i64,
+    /// Number of attempts so far.
+    attempt: u32,
+}
+
+/// Outcome of a merge attempt.
+#[derive(Debug)]
+enum MergeOutcome {
+    /// Merge succeeded and was pushed.
+    Success(String),
+    /// Merge was deferred (checks pending, lock unavailable, etc.).
+    Deferred,
+    /// Merge was rolled back due to push failure, retry scheduled.
+    RolledBack,
+    /// Merge failed (conflict, etc.).
+    Failed,
 }
 
 /// The Refinery workflow controller.
@@ -88,8 +115,8 @@ pub struct RefineryLoopResult {
 pub struct RefineryWorkflow {
     /// Configuration.
     config: RefineryConfig,
-    /// Grit client for task/session queries.
-    grit: Arc<GritClient>,
+    /// Grite client for task/session queries.
+    grite: Arc<GriteClient>,
     /// Repository root path.
     repo_root: PathBuf,
     /// Track merge attempts by task_id.
@@ -98,21 +125,28 @@ pub struct RefineryWorkflow {
     merging: Vec<String>,
     /// Lock helper for policy-aware lock management.
     lock_helper: LockHelper,
+    /// Track retry schedules by task_id.
+    retry_schedules: HashMap<String, RetryInfo>,
+    /// Event emitter for broadcasting events to WebSocket clients.
+    event_emitter: EventEmitter,
 }
 
 impl RefineryWorkflow {
     /// Create a new RefineryWorkflow.
-    pub fn new(config: RefineryConfig, grit: GritClient, repo_root: PathBuf) -> Self {
-        let grit = Arc::new(grit);
-        let lock_helper = LockHelper::from_config(Arc::clone(&grit), &config.lock_policy);
+    pub fn new(config: RefineryConfig, grite: GriteClient, repo_root: PathBuf) -> Self {
+        let grite = Arc::new(grite);
+        let lock_helper = LockHelper::from_config(Arc::clone(&grite), &config.lock_policy);
+        let event_emitter = EventEmitter::new();
 
         Self {
             config,
-            grit,
+            grite,
             repo_root,
             merge_attempts: HashMap::new(),
             merging: Vec::new(),
             lock_helper,
+            retry_schedules: HashMap::new(),
+            event_emitter,
         }
     }
 
@@ -161,18 +195,33 @@ impl RefineryWorkflow {
             self.merging.push(task.task_id.clone());
 
             match self.attempt_merge(task).await {
-                Ok(()) => {
-                    result.succeeded += 1;
+                Ok(outcome) => {
                     self.merging.retain(|id| id != &task.task_id);
-                    self.merge_attempts.remove(&task.task_id);
+
+                    match outcome {
+                        MergeOutcome::Success(_) => {
+                            result.succeeded += 1;
+                            self.merge_attempts.remove(&task.task_id);
+                        }
+                        MergeOutcome::Deferred => {
+                            // Not counted as success or failure, will retry next cycle
+                        }
+                        MergeOutcome::RolledBack => {
+                            result.rolled_back += 1;
+                            // Keep merge_attempts for retry tracking
+                        }
+                        MergeOutcome::Failed => {
+                            result.failed += 1;
+                        }
+                    }
                 }
                 Err(e) => {
                     result.failed += 1;
+                    self.merging.retain(|id| id != &task.task_id);
                     result.errors.push(format!(
                         "Merge failed for {}: {}",
                         task.task_id, e
                     ));
-                    self.merging.retain(|id| id != &task.task_id);
                 }
             }
         }
@@ -180,21 +229,36 @@ impl RefineryWorkflow {
         Ok(result)
     }
 
-    /// Query tasks with merge:queued label.
+    /// Query tasks eligible for merge (NeedsReview status, not in retry cooldown).
     fn query_merge_queue(&self) -> Result<Vec<Task>, WorkflowError> {
-        // Query tasks that are needs-review status with merge:queued label
-        let tasks = self.grit.task_list(None)?;
+        let tasks = self.grite.task_list(None)?;
+        let now = chrono::Utc::now().timestamp();
 
         Ok(tasks
             .into_iter()
-            .filter(|task| task.status == TaskStatus::NeedsReview)
+            .filter(|task| {
+                // Must be NeedsReview status
+                if task.status != TaskStatus::NeedsReview {
+                    return false;
+                }
+
+                // Check if in retry cooldown
+                if let Some(retry_info) = self.retry_schedules.get(&task.task_id) {
+                    // Skip if retry time hasn't come yet
+                    if now < retry_info.retry_at {
+                        return false;
+                    }
+                }
+
+                true
+            })
             .collect())
     }
 
     /// Attempt to merge a task's branch.
-    async fn attempt_merge(&self, task: &Task) -> Result<(), WorkflowError> {
+    async fn attempt_merge(&mut self, task: &Task) -> Result<MergeOutcome, WorkflowError> {
         // Set merge:running label
-        self.set_merge_label(&task.grit_issue_id, merge_labels::RUNNING)?;
+        self.set_merge_label(&task.grite_issue_id, merge_labels::RUNNING)?;
 
         // Post merge attempt comment
         let attempt = self.merge_attempts.get(&task.task_id).copied().unwrap_or(1);
@@ -202,7 +266,7 @@ impl RefineryWorkflow {
             "[merge]\nattempt = {}\nstrategy = \"{}\"\nresult = \"running\"\n[/merge]",
             attempt, self.config.rebase_strategy
         );
-        self.grit.issue_comment(&task.grit_issue_id, &comment)?;
+        self.grite.issue_comment(&task.grite_issue_id, &comment)?;
 
         // Check required checks
         match self.check_required_checks(task) {
@@ -212,14 +276,14 @@ impl RefineryWorkflow {
             Ok(false) => {
                 // Checks pending - skip this task for now, will retry next cycle
                 // Remove running label since we're not actually merging yet
-                self.set_merge_label(&task.grit_issue_id, merge_labels::QUEUED)?;
-                return Ok(());
+                self.set_merge_label(&task.grite_issue_id, merge_labels::QUEUED)?;
+                return Ok(MergeOutcome::Deferred);
             }
             Err(e) => {
                 // Check failed - mark as failed
-                self.set_merge_label(&task.grit_issue_id, merge_labels::FAILED)?;
-                self.grit.issue_comment(
-                    &task.grit_issue_id,
+                self.set_merge_label(&task.grite_issue_id, merge_labels::FAILED)?;
+                self.grite.issue_comment(
+                    &task.grite_issue_id,
                     &format!("Merge blocked: {}", e),
                 )?;
                 return Err(e);
@@ -233,9 +297,9 @@ impl RefineryWorkflow {
             Ok(locks) => locks,
             Err(e) => {
                 // Lock acquisition failed - skip this task for now, will retry next cycle
-                self.set_merge_label(&task.grit_issue_id, merge_labels::QUEUED)?;
-                self.grit.issue_comment(
-                    &task.grit_issue_id,
+                self.set_merge_label(&task.grite_issue_id, merge_labels::QUEUED)?;
+                self.grite.issue_comment(
+                    &task.grite_issue_id,
                     &format!("Merge deferred: {}", e),
                 )?;
                 return Err(e);
@@ -245,7 +309,7 @@ impl RefineryWorkflow {
         // Get task branch name (convention: task-{task_id})
         let branch = format!("task-{}", task.task_id);
 
-        // Execute merge based on strategy
+        // Execute merge based on strategy (returns (commit_sha, pre_merge_sha))
         let merge_result = match self.config.rebase_strategy.as_str() {
             "rebase" => self.git_rebase_merge(&branch).await,
             "merge" => self.git_merge(&branch).await,
@@ -253,40 +317,112 @@ impl RefineryWorkflow {
             _ => self.git_rebase_merge(&branch).await, // Default to rebase
         };
 
-        // Release repo lock (always, regardless of success/failure)
-        self.lock_helper.release_locks(&acquired_locks);
+        let outcome = match merge_result {
+            Ok((commit_sha, pre_merge_sha)) => {
+                // Merge succeeded locally, now try to push
+                match self.run_git(&["push", "origin", "main"]) {
+                    Ok(_) => {
+                        // Push succeeded - complete success
+                        self.set_merge_label(&task.grite_issue_id, merge_labels::SUCCEEDED)?;
 
-        match merge_result {
-            Ok(commit_sha) => {
-                // Success: update labels and status
-                self.set_merge_label(&task.grit_issue_id, merge_labels::SUCCEEDED)?;
+                        let comment = format!(
+                            "[merge]\nattempt = {}\nstrategy = \"{}\"\nresult = \"succeeded\"\nmerge_commit = \"{}\"\n[/merge]",
+                            attempt, self.config.rebase_strategy, commit_sha
+                        );
+                        self.grite.issue_comment(&task.grite_issue_id, &comment)?;
 
-                // Post success comment
-                let comment = format!(
-                    "[merge]\nattempt = {}\nstrategy = \"{}\"\nresult = \"succeeded\"\nmerge_commit = \"{}\"\n[/merge]",
-                    attempt, self.config.rebase_strategy, commit_sha
-                );
-                self.grit.issue_comment(&task.grit_issue_id, &comment)?;
+                        // Update task status to Merged
+                        self.grite.task_update_status(&task.task_id, TaskStatus::Merged)?;
 
-                // Update task status to Merged
-                self.grit.task_update_status(&task.task_id, TaskStatus::Merged)?;
+                        // Clear retry schedule if any
+                        self.retry_schedules.remove(&task.task_id);
 
-                Ok(())
+                        // Emit merge completed event
+                        self.event_emitter.merge_completed(&task.task_id, &commit_sha, &branch);
+                        self.event_emitter.task_updated(&task.task_id, "merged", Some(&task.convoy_id));
+
+                        MergeOutcome::Success(commit_sha)
+                    }
+                    Err(push_error) => {
+                        // Push failed - rollback and schedule retry
+                        self.rollback_merge(task, &pre_merge_sha, &push_error.to_string())?;
+                        MergeOutcome::RolledBack
+                    }
+                }
             }
             Err(e) => {
-                // Failure: update labels
-                self.set_merge_label(&task.grit_issue_id, merge_labels::FAILED)?;
+                // Merge itself failed (conflict, etc.)
+                self.set_merge_label(&task.grite_issue_id, merge_labels::FAILED)?;
 
-                // Post failure comment
                 let comment = format!(
                     "[merge]\nattempt = {}\nstrategy = \"{}\"\nresult = \"failed\"\nerror = \"{}\"\n[/merge]",
                     attempt, self.config.rebase_strategy, e
                 );
-                self.grit.issue_comment(&task.grit_issue_id, &comment)?;
+                self.grite.issue_comment(&task.grite_issue_id, &comment)?;
 
-                Err(e)
+                // Emit merge failed event
+                self.event_emitter.merge_failed(&task.task_id, &e.to_string(), attempt);
+
+                MergeOutcome::Failed
             }
+        };
+
+        // Release repo lock (always, regardless of outcome)
+        self.lock_helper.release_locks(&acquired_locks);
+
+        Ok(outcome)
+    }
+
+    /// Rollback a merge and schedule retry.
+    fn rollback_merge(
+        &mut self,
+        task: &Task,
+        pre_merge_sha: &str,
+        reason: &str,
+    ) -> Result<(), WorkflowError> {
+        // Hard reset to pre-merge state
+        if let Err(e) = self.run_git(&["reset", "--hard", pre_merge_sha]) {
+            // Failed to rollback - this is serious, mark as failed
+            self.set_merge_label(&task.grite_issue_id, merge_labels::FAILED)?;
+            return Err(WorkflowError::GitFailed(format!(
+                "Failed to rollback merge: {}",
+                e
+            )));
         }
+
+        // Calculate retry time with exponential backoff
+        let attempt = self.merge_attempts.get(&task.task_id).copied().unwrap_or(1);
+        let backoff_secs = 60 * (2_i64.pow(attempt.min(5))); // 1m, 2m, 4m, 8m, 16m, 32m max
+        let retry_at = chrono::Utc::now().timestamp() + backoff_secs;
+
+        // Store retry schedule
+        self.retry_schedules.insert(
+            task.task_id.clone(),
+            RetryInfo {
+                retry_at,
+                attempt,
+            },
+        );
+
+        // Update label to retry-pending
+        self.set_merge_label(&task.grite_issue_id, merge_labels::RETRY_PENDING)?;
+
+        // Post rollback comment
+        let retry_time = chrono::DateTime::from_timestamp(retry_at, 0)
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_else(|| format!("{}s from now", backoff_secs));
+
+        let comment = format!(
+            "[rollback]\nreason = \"{}\"\nreset_to = \"{}\"\nretry_at = \"{}\"\nbackoff_secs = {}\nattempt = {}\n[/rollback]",
+            reason, pre_merge_sha, retry_time, backoff_secs, attempt
+        );
+        self.grite.issue_comment(&task.grite_issue_id, &comment)?;
+
+        // Emit rollback and retry scheduled events
+        self.event_emitter.merge_rolled_back(&task.task_id, pre_merge_sha, reason);
+        self.event_emitter.merge_retry_scheduled(&task.task_id, &retry_time, attempt);
+
+        Ok(())
     }
 
     /// Check if required status checks are passing.
@@ -387,10 +523,13 @@ impl RefineryWorkflow {
     }
 
     /// Perform a rebase merge.
-    async fn git_rebase_merge(&self, branch: &str) -> Result<String, WorkflowError> {
-        // Checkout main, rebase branch, fast-forward merge
+    ///
+    /// Returns (commit_sha, pre_merge_sha) on success.
+    async fn git_rebase_merge(&self, branch: &str) -> Result<(String, String), WorkflowError> {
+        // Checkout main and get pre-merge state
         self.run_git(&["checkout", "main"])?;
         self.run_git(&["pull", "--rebase", "origin", "main"])?;
+        let pre_merge_sha = self.get_head_sha()?;
 
         // Rebase the branch onto main
         let rebase_result = self.run_git(&["rebase", "main", branch]);
@@ -409,31 +548,33 @@ impl RefineryWorkflow {
         // Get merge commit SHA
         let sha = self.get_head_sha()?;
 
-        // Push to origin
-        self.run_git(&["push", "origin", "main"])?;
-
-        Ok(sha)
+        Ok((sha, pre_merge_sha))
     }
 
     /// Perform a regular merge.
-    async fn git_merge(&self, branch: &str) -> Result<String, WorkflowError> {
+    ///
+    /// Returns (commit_sha, pre_merge_sha) on success.
+    async fn git_merge(&self, branch: &str) -> Result<(String, String), WorkflowError> {
         self.run_git(&["checkout", "main"])?;
         self.run_git(&["pull", "--rebase", "origin", "main"])?;
+        let pre_merge_sha = self.get_head_sha()?;
 
         // Merge with merge commit
         let message = format!("Merge branch '{}'", branch);
         self.run_git(&["merge", "--no-ff", "-m", &message, branch])?;
 
         let sha = self.get_head_sha()?;
-        self.run_git(&["push", "origin", "main"])?;
 
-        Ok(sha)
+        Ok((sha, pre_merge_sha))
     }
 
     /// Perform a squash merge.
-    async fn git_squash_merge(&self, branch: &str) -> Result<String, WorkflowError> {
+    ///
+    /// Returns (commit_sha, pre_merge_sha) on success.
+    async fn git_squash_merge(&self, branch: &str) -> Result<(String, String), WorkflowError> {
         self.run_git(&["checkout", "main"])?;
         self.run_git(&["pull", "--rebase", "origin", "main"])?;
+        let pre_merge_sha = self.get_head_sha()?;
 
         // Squash merge
         self.run_git(&["merge", "--squash", branch])?;
@@ -443,9 +584,8 @@ impl RefineryWorkflow {
         self.run_git(&["commit", "-m", &message])?;
 
         let sha = self.get_head_sha()?;
-        self.run_git(&["push", "origin", "main"])?;
 
-        Ok(sha)
+        Ok((sha, pre_merge_sha))
     }
 
     /// Run a git command.
@@ -473,11 +613,11 @@ impl RefineryWorkflow {
     fn set_merge_label(&self, issue_id: &str, label: &str) -> Result<(), WorkflowError> {
         // Remove all merge labels first
         for old_label in merge_labels::all() {
-            let _ = self.grit.issue_label_remove(issue_id, &[old_label]);
+            let _ = self.grite.issue_label_remove(issue_id, &[old_label]);
         }
 
         // Add new label
-        self.grit.issue_label_add(issue_id, &[label])?;
+        self.grite.issue_label_add(issue_id, &[label])?;
         Ok(())
     }
 

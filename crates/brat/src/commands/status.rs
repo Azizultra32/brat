@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use chrono::Utc;
 use libbrat_config::InterventionsConfig;
-use libbrat_grit::{
-    Convoy, GritClient, Session, SessionStatus as GritSessionStatus, Task,
+use libbrat_grite::{
+    Convoy, GriteClient, Session, SessionStatus as GritSessionStatus, Task,
     TaskStatus as GritTaskStatus,
 };
 use serde::{Deserialize, Serialize};
@@ -183,9 +183,9 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
     // Require that brat is initialized
     let _config = ctx.require_initialized()?;
 
-    // Check if grit is initialized
-    if !ctx.is_grit_initialized() {
-        // Return empty status if grit not initialized
+    // Check if grite is initialized
+    if !ctx.is_grite_initialized() {
+        // Return empty status if grite not initialized
         return Ok(StatusOutput {
             schema_version: 1,
             generated_ts: Utc::now().timestamp_millis(),
@@ -199,12 +199,12 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
         });
     }
 
-    let client = ctx.grit_client();
+    let client = ctx.grite_client();
 
-    // Query convoys from Grit
+    // Query convoys from Grite
     let convoys = client.convoy_list().unwrap_or_default();
 
-    // Query tasks from Grit
+    // Query tasks from Grite
     let all_tasks = client.task_list(None).unwrap_or_default();
 
     // Filter by convoy if specified
@@ -268,8 +268,8 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
         }
     }
 
-    // Query sessions from Grit
-    let grit_sessions: Vec<Session> = if let Some(ref convoy_id) = args.convoy {
+    // Query sessions from Grite
+    let grite_sessions: Vec<Session> = if let Some(ref convoy_id) = args.convoy {
         // Get sessions for tasks in this convoy only
         let mut sessions = Vec::new();
         for task in &tasks {
@@ -285,7 +285,7 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
     };
 
     // Convert to output format, filtering out Exit sessions
-    let session_statuses: Vec<SessionStatus> = grit_sessions
+    let session_statuses: Vec<SessionStatus> = grite_sessions
         .into_iter()
         .filter(|s| s.status != GritSessionStatus::Exit)
         .map(|s| SessionStatus {
@@ -347,10 +347,10 @@ fn build_status(cli: &Cli, args: &StatusArgs) -> Result<StatusOutput, BratError>
 // Helper functions for status queries
 // =============================================================================
 
-/// Query merge queue status from Grit.
+/// Query merge queue status from Grite.
 ///
 /// Counts tasks with merge:* labels.
-fn query_merge_queue(client: &GritClient) -> MergeQueueStatus {
+fn query_merge_queue(client: &GriteClient) -> MergeQueueStatus {
     let mut status = MergeQueueStatus::default();
 
     // Query all tasks and check for merge labels
@@ -402,11 +402,11 @@ struct GritLockError {
     message: String,
 }
 
-/// Query locks from Grit.
+/// Query locks from Grite.
 ///
-/// Shells out to `grit lock status --json`.
+/// Shells out to `grite lock status --json`.
 fn query_locks(repo_root: &std::path::Path) -> Vec<LockStatus> {
-    let output = Command::new("grit")
+    let output = Command::new("grite")
         .args(["lock", "status", "--json"])
         .current_dir(repo_root)
         .output();
@@ -429,7 +429,7 @@ fn query_locks(repo_root: &std::path::Path) -> Vec<LockStatus> {
             }
             Vec::new()
         }
-        _ => Vec::new(), // Graceful fallback if grit lock status isn't available
+        _ => Vec::new(), // Graceful fallback if grite lock status isn't available
     }
 }
 

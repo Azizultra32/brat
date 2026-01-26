@@ -1,7 +1,7 @@
 //! Workflow template system for brat.
 //!
 //! This crate provides YAML-based workflow templates that can be expanded
-//! into Grit convoys and tasks. Workflows are stored in `.brat/workflows/`
+//! into Grite convoys and tasks. Workflows are stored in `.brat/workflows/`
 //! and can be either:
 //!
 //! - **Sequential workflows** (`type: workflow`): Steps execute in order based on dependencies

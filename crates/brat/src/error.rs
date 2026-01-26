@@ -1,7 +1,7 @@
 use std::io;
 
 use libbrat_config::ConfigError;
-use libbrat_grit::GritError;
+use libbrat_grite::GriteError;
 
 use crate::workflows::WorkflowError;
 
@@ -17,24 +17,24 @@ pub enum BratError {
     NotInitialized,
 
     /// Grit is not initialized in this repository.
-    #[error("grit not initialized in this repository (run 'brat init' first)")]
-    GritNotInitialized,
+    #[error("grite not initialized in this repository (run 'brat init' first)")]
+    GriteNotInitialized,
 
     /// Brat is already initialized.
     #[error("brat already initialized in this repository")]
     AlreadyInitialized,
 
     /// Grit initialization failed.
-    #[error("grit init failed: {0}")]
-    GritInitFailed(String),
+    #[error("grite init failed: {0}")]
+    GriteInitFailed(String),
 
     /// Grit command failed.
-    #[error("grit command failed: {0}")]
-    GritCommandFailed(String),
+    #[error("grite command failed: {0}")]
+    GriteCommandFailed(String),
 
     /// Grit error.
-    #[error("grit error: {0}")]
-    Grit(#[from] GritError),
+    #[error("grite error: {0}")]
+    Grite(#[from] GriteError),
 
     /// Configuration error.
     #[error("config error: {0}")]
@@ -67,11 +67,11 @@ impl BratError {
         match self {
             BratError::NotAGitRepo => "not_git_repo",
             BratError::NotInitialized => "not_initialized",
-            BratError::GritNotInitialized => "grit_not_initialized",
+            BratError::GriteNotInitialized => "grite_not_initialized",
             BratError::AlreadyInitialized => "already_initialized",
-            BratError::GritInitFailed(_) => "grit_init_failed",
-            BratError::GritCommandFailed(_) => "grit_command_failed",
-            BratError::Grit(_) => "grit_error",
+            BratError::GriteInitFailed(_) => "grite_init_failed",
+            BratError::GriteCommandFailed(_) => "grite_command_failed",
+            BratError::Grite(_) => "grite_error",
             BratError::Config(_) => "config_error",
             BratError::Io(_) => "io_error",
             BratError::Json(_) => "json_error",
@@ -86,11 +86,11 @@ impl BratError {
         match self {
             BratError::NotAGitRepo => 2,
             BratError::NotInitialized => 3,
-            BratError::GritNotInitialized => 4,
+            BratError::GriteNotInitialized => 4,
             BratError::AlreadyInitialized => 5,
-            BratError::GritInitFailed(_) => 6,
-            BratError::GritCommandFailed(_) => 7,
-            BratError::Grit(_) => 8,
+            BratError::GriteInitFailed(_) => 6,
+            BratError::GriteCommandFailed(_) => 7,
+            BratError::Grite(_) => 8,
             BratError::Config(_) => 9,
             BratError::Io(_) => 10,
             BratError::Json(_) => 11,
