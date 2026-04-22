@@ -6,7 +6,7 @@ use std::time::Duration;
 use libbrat_engine::platform::{
     configure_detached_process, process_exists, send_term_signal, wait_for_process_exit,
 };
-use libbrat_gritee::SessionStatus;
+use libbrat_grite::SessionStatus;
 use libbrat_session::read_session_logs;
 use serde::Serialize;
 
@@ -237,7 +237,7 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     let mut exit_posted = false;
     let mut signal_sent = false;
 
-    if session.status != libbrat_gritee::SessionStatus::Exit {
+    if session.status != libbrat_grite::SessionStatus::Exit {
         if let Some(pid) = session.pid {
             if process_exists(pid) {
                 if let Err(e) = send_term_signal(pid) {
@@ -474,7 +474,7 @@ fn run_tail_follow(
     cli: &Cli,
     repo_root: &std::path::Path,
     session_id: &str,
-    client: &libbrat_gritee::GriteeClient,
+    client: &libbrat_grite::GriteeClient,
 ) -> Result<(), BratError> {
     let poll_interval = Duration::from_secs(1);
     let mut last_ref: Option<String> = None;
@@ -514,7 +514,7 @@ fn run_tail_follow(
         }
 
         // Check if session has exited
-        if session.status == libbrat_gritee::SessionStatus::Exit {
+        if session.status == libbrat_grite::SessionStatus::Exit {
             if !cli.json && !cli.quiet {
                 println!("\n[session exited]");
             }

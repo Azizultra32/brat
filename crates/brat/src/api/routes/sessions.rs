@@ -7,7 +7,7 @@ use axum::{Json, Router};
 use libbrat_engine::platform::{
     configure_detached_process, process_exists, send_term_signal, wait_for_process_exit,
 };
-use libbrat_gritee::SessionStatus;
+use libbrat_grite::SessionStatus;
 use libbrat_session::read_session_logs;
 use serde::{Deserialize, Serialize};
 use std::process::{Command as ProcessCommand, Stdio};
