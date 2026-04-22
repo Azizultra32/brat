@@ -4,11 +4,13 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use libbrat_engine::platform::{process_exists, send_term_signal, wait_for_process_exit};
-use libbrat_gritee::{GriteeClient, SessionStatus};
+use libbrat_engine::platform::{
+    configure_detached_process, process_exists, send_term_signal, wait_for_process_exit,
+};
+use libbrat_gritee::SessionStatus;
 use libbrat_session::read_session_logs;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::process::{Command as ProcessCommand, Stdio};
 use std::time::Duration;
 
 use crate::api::state::DaemonState;
@@ -248,12 +250,12 @@ async fn stop_session(
 
     if signal_sent {
         spawn_stop_reconciler(
-            ctx.path.clone(),
+            &ctx.path,
             session_id.clone(),
             session.pid.expect("signal_sent requires a live pid"),
             req.reason.clone(),
             ctx.config.interventions.stale_session_ms,
-        );
+        )?;
         Ok(StatusCode::ACCEPTED)
     } else {
         Ok(StatusCode::NO_CONTENT)
@@ -261,34 +263,73 @@ async fn stop_session(
 }
 
 fn spawn_stop_reconciler(
-    repo_root: PathBuf,
+    repo_root: &std::path::Path,
     session_id: String,
     pid: u32,
     reason: String,
     wait_timeout_ms: u64,
-) {
-    tokio::task::spawn_blocking(move || {
-        if !wait_for_process_exit(pid, Duration::from_millis(wait_timeout_ms)) {
-            return;
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    let brat_bin = resolve_brat_cli_binary().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to locate brat CLI binary: {}", e),
+            }),
+        )
+    })?;
+
+    let mut cmd = ProcessCommand::new(brat_bin);
+    cmd.current_dir(repo_root)
+        .arg("--quiet")
+        .arg("--repo")
+        .arg(repo_root)
+        .arg("session")
+        .arg("finalize-stop")
+        .arg(session_id)
+        .arg("--pid")
+        .arg(pid.to_string())
+        .arg("--reason")
+        .arg(reason)
+        .arg("--wait-timeout-ms")
+        .arg(wait_timeout_ms.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    configure_detached_process(&mut cmd);
+
+    cmd.spawn().map(|_| ()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to spawn stop finalizer: {}", e),
+            }),
+        )
+    })
+}
+
+fn resolve_brat_cli_binary() -> Result<std::path::PathBuf, String> {
+    let current = std::env::current_exe()
+        .map_err(|e| format!("failed to resolve current executable: {}", e))?;
+
+    let file_name = current
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "current executable has no valid filename".to_string())?;
+
+    if file_name == format!("bratd{}", std::env::consts::EXE_SUFFIX) {
+        let sibling = current.with_file_name(format!("brat{}", std::env::consts::EXE_SUFFIX));
+        if sibling.exists() {
+            return Ok(sibling);
         }
 
-        let client = GriteeClient::new(&repo_root);
-        let session = match client.session_get(&session_id) {
-            Ok(session) => session,
-            Err(_) => return,
-        };
+        return Err(format!(
+            "current executable is {}, but sibling brat binary was not found at {}",
+            file_name,
+            sibling.display()
+        ));
+    }
 
-        if session.status == SessionStatus::Exit {
-            return;
-        }
-
-        let _ = client.session_exit(
-            &session_id,
-            -1,
-            &reason,
-            session.last_output_ref.as_deref(),
-        );
-    });
+    Ok(current)
 }
 
 /// Query parameters for getting session logs.
