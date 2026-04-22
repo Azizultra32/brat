@@ -230,6 +230,7 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     let config = ctx.require_initialized()?;
     let stop_timeout = Duration::from_millis(config.engine.stop_timeout_ms);
     let finalize_timeout_ms = normalize_finalize_timeout_ms(config.interventions.stale_session_ms);
+    let retry_deadline_ms = deferred_stop_retry_deadline_ms(finalize_timeout_ms);
 
     let client = ctx.gritee_client();
     let session = client.session_get(&args.session_id)?;
@@ -267,6 +268,7 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
                             pid,
                             &args.reason,
                             finalize_timeout_ms,
+                            retry_deadline_ms,
                         )?;
                     }
                 }
@@ -318,14 +320,22 @@ fn run_finalize_stop(cli: &Cli, args: &SessionFinalizeStopArgs) -> Result<(), Br
     ctx.require_initialized()?;
     ctx.require_gritee_initialized()?;
     let wait_timeout_ms = normalize_finalize_timeout_ms(args.wait_timeout_ms);
+    let retry_deadline_ms = args
+        .retry_deadline_ms
+        .unwrap_or_else(|| deferred_stop_retry_deadline_ms(wait_timeout_ms));
 
     if !wait_for_process_exit(args.pid, Duration::from_millis(wait_timeout_ms)) {
+        if current_time_ms() >= retry_deadline_ms {
+            return Ok(());
+        }
+
         spawn_stop_finalizer(
             &ctx,
             &args.session_id,
             args.pid,
             &args.reason,
             wait_timeout_ms,
+            retry_deadline_ms,
         )?;
         return Ok(());
     }
@@ -352,6 +362,7 @@ fn spawn_stop_finalizer(
     pid: u32,
     reason: &str,
     wait_timeout_ms: u64,
+    retry_deadline_ms: u64,
 ) -> Result<(), BratError> {
     let brat_bin = std::env::current_exe()
         .map_err(|e| BratError::Other(format!("failed to get current exe: {}", e)))?;
@@ -368,6 +379,8 @@ fn spawn_stop_finalizer(
         .arg(reason)
         .arg("--wait-timeout-ms")
         .arg(wait_timeout_ms.to_string())
+        .arg("--retry-deadline-ms")
+        .arg(retry_deadline_ms.to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -380,6 +393,18 @@ fn spawn_stop_finalizer(
 
 fn normalize_finalize_timeout_ms(timeout_ms: u64) -> u64 {
     timeout_ms.max(1_000)
+}
+
+fn deferred_stop_retry_deadline_ms(wait_timeout_ms: u64) -> u64 {
+    let budget_ms = wait_timeout_ms.saturating_mul(2).max(60_000);
+    current_time_ms().saturating_add(budget_ms)
+}
+
+fn current_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Run the session tail command.

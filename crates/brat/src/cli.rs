@@ -437,6 +437,10 @@ pub struct SessionFinalizeStopArgs {
     /// Maximum time to wait for process exit before giving up.
     #[arg(long, default_value = "300000")]
     pub wait_timeout_ms: u64,
+
+    /// Absolute unix-millis deadline after which deferred stop retries stop.
+    #[arg(long)]
+    pub retry_deadline_ms: Option<u64>,
 }
 
 /// Lock subcommands

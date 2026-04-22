@@ -255,6 +255,7 @@ async fn stop_session(
             session.pid.expect("signal_sent requires a live pid"),
             req.reason.clone(),
             ctx.config.interventions.stale_session_ms.max(1_000),
+            deferred_stop_retry_deadline_ms(ctx.config.interventions.stale_session_ms.max(1_000)),
         )?;
         Ok(StatusCode::ACCEPTED)
     } else {
@@ -268,6 +269,7 @@ fn spawn_stop_reconciler(
     pid: u32,
     reason: String,
     wait_timeout_ms: u64,
+    retry_deadline_ms: u64,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
     let brat_bin = resolve_brat_cli_binary().map_err(|e| {
         (
@@ -292,6 +294,8 @@ fn spawn_stop_reconciler(
         .arg(reason)
         .arg("--wait-timeout-ms")
         .arg(wait_timeout_ms.to_string())
+        .arg("--retry-deadline-ms")
+        .arg(retry_deadline_ms.to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -305,6 +309,18 @@ fn spawn_stop_reconciler(
             }),
         )
     })
+}
+
+fn deferred_stop_retry_deadline_ms(wait_timeout_ms: u64) -> u64 {
+    let budget_ms = wait_timeout_ms.saturating_mul(2).max(60_000);
+    current_time_ms().saturating_add(budget_ms)
+}
+
+fn current_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn resolve_brat_cli_binary() -> Result<std::path::PathBuf, String> {
