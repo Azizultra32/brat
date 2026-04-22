@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use libbrat_engine::platform::{process_exists, send_term_signal};
+use libbrat_engine::platform::{process_exists, send_term_signal, wait_for_process_exit};
 use libbrat_session::read_session_logs;
 use serde::Serialize;
 
@@ -219,6 +219,7 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
     ctx.require_gritee_initialized()?;
+    let stop_timeout = Duration::from_millis(ctx.require_initialized()?.engine.stop_timeout_ms);
 
     let client = ctx.gritee_client();
     let session = client.session_get(&args.session_id)?;
@@ -239,6 +240,18 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
                     }
                 } else {
                     signal_sent = true;
+                    if wait_for_process_exit(pid, stop_timeout) {
+                        exit_posted = true;
+                        signal_sent = false;
+                    } else {
+                        client.issue_comment(
+                            &session.gritee_issue_id,
+                            &format!(
+                                "Stop requested for session `{}` (reason: {}).",
+                                args.session_id, args.reason
+                            ),
+                        )?;
+                    }
                 }
             } else {
                 exit_posted = true;

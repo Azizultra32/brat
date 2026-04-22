@@ -29,11 +29,11 @@ idle_timeout_secs = 900
 [swarm]
 max_polecats = 6
 worktree_root = ".gritee/worktrees"
-engine = "claude"
+engine = "codex"
 engine_args = []
 
 [engine]
-default = "claude"
+default = "codex"
 spawn_timeout_ms = 60000
 send_timeout_ms = 5000
 tail_timeout_ms = 10000

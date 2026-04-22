@@ -4,10 +4,11 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use libbrat_engine::platform::{process_exists, send_term_signal};
+use libbrat_engine::platform::{process_exists, send_term_signal, wait_for_process_exit};
 use libbrat_gritee::SessionStatus;
 use libbrat_session::read_session_logs;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 use crate::api::state::DaemonState;
 
@@ -189,6 +190,7 @@ async fn stop_session(
     }
 
     let mut exit_posted = false;
+    let mut signal_sent = false;
 
     if let Some(pid) = session.pid {
         if process_exists(pid) {
@@ -203,6 +205,23 @@ async fn stop_session(
                         }),
                     ));
                 }
+            } else if wait_for_process_exit(pid, Duration::from_millis(ctx.config.engine.stop_timeout_ms)) {
+                exit_posted = true;
+            } else {
+                ctx.gritee
+                    .issue_comment(
+                        &session.gritee_issue_id,
+                        &format!("Stop requested for session `{}` (reason: {}).", session_id, req.reason),
+                    )
+                    .map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse {
+                                error: format!("Failed to record stop request: {}", e),
+                            }),
+                        )
+                    })?;
+                signal_sent = true;
             }
         } else {
             exit_posted = true;
@@ -226,7 +245,11 @@ async fn stop_session(
             })?;
     }
 
-    Ok(StatusCode::NO_CONTENT)
+    if signal_sent {
+        Ok(StatusCode::ACCEPTED)
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
 }
 
 /// Query parameters for getting session logs.

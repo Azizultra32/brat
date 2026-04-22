@@ -2,8 +2,8 @@
 //!
 //! Session output is cached on disk for local observability and referenced by a
 //! stable `sha256:<digest>` contract. Readers verify that digest against the
-//! corresponding on-disk log file. Raw Git blob refs are supported only as a
-//! compatibility read path.
+//! corresponding on-disk log file. Raw Git blob refs, plus legacy
+//! `sha256:`-prefixed blob refs, are supported as compatibility read paths.
 
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -53,7 +53,10 @@ pub fn read_session_logs(
     output_ref: &str,
 ) -> Result<String, String> {
     if let Some(expected_hash) = output_ref.strip_prefix("sha256:") {
-        return read_legacy_log_file(repo_root, session_id, Some(expected_hash));
+        return match read_legacy_log_file(repo_root, session_id, Some(expected_hash)) {
+            Ok(content) => Ok(content),
+            Err(file_err) => read_git_blob(repo_root, expected_hash).map_err(|_| file_err),
+        };
     }
 
     read_git_blob(repo_root, output_ref)
@@ -220,6 +223,36 @@ mod tests {
         let oid = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
         let read_content = read_session_logs(&temp_dir, "unused-session-id", &oid).unwrap();
+        assert_eq!(read_content, content);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_read_session_logs_supports_sha256_prefixed_git_blob_refs() {
+        let temp_dir = std::env::temp_dir().join("brat-logs-test-prefixed-git-blob");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+        init_git_repo(&temp_dir);
+
+        let content = "blob line 1\nblob line 2";
+        let output = Command::new("git")
+            .args(["hash-object", "-w", "--stdin"])
+            .current_dir(&temp_dir)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        let mut child = output;
+        use std::io::Write as _;
+        child.stdin.as_mut().unwrap().write_all(content.as_bytes()).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(output.status.success());
+        let oid = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        let read_content =
+            read_session_logs(&temp_dir, "unused-session-id", &format!("sha256:{}", oid)).unwrap();
         assert_eq!(read_content, content);
 
         let _ = fs::remove_dir_all(&temp_dir);
