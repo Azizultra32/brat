@@ -719,7 +719,7 @@ fn detect_origin_head_branch_from_remote_show(repo_root: &std::path::Path) -> Op
 mod tests {
     use super::{
         detect_origin_head_branch_from_remote_show, parse_origin_head_ref,
-        parse_remote_show_head_branch, resolve_target_branch,
+        parse_remote_show_head_branch, resolve_target_branch, WorkflowError,
     };
     use std::fs;
 
