@@ -319,6 +319,13 @@ fn run_finalize_stop(cli: &Cli, args: &SessionFinalizeStopArgs) -> Result<(), Br
     ctx.require_gritee_initialized()?;
 
     if !wait_for_process_exit(args.pid, Duration::from_millis(args.wait_timeout_ms)) {
+        spawn_stop_finalizer(
+            &ctx,
+            &args.session_id,
+            args.pid,
+            &args.reason,
+            args.wait_timeout_ms,
+        )?;
         return Ok(());
     }
 

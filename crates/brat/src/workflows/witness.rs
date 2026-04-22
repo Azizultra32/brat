@@ -260,7 +260,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         // Every non-shell engine consumes the task through SpawnSpec.command.
         let is_prompt_engine = self.config.engine_command != "shell";
         let is_shell_engine = self.config.engine_command == "shell";
-        let full_task = if is_prompt_engine && task.body.is_empty() {
+        let full_task = if task.body.is_empty() {
             self.gritee.task_get(&task.task_id)?
         } else {
             task.clone()
