@@ -2,8 +2,10 @@
 //!
 //! Session output is cached on disk for local observability and referenced by a
 //! stable `sha256:<digest>` contract. Readers verify that digest against the
-//! corresponding on-disk log file. Raw Git blob refs, plus legacy
-//! `sha256:`-prefixed blob refs, are supported as compatibility read paths.
+//! corresponding on-disk log file. Raw Git blob refs are supported as a
+//! compatibility read path. Legacy `sha256:`-prefixed blob refs are only
+//! supported for SHA-1-shaped object IDs, which avoids ambiguous fallback for
+//! canonical 64-hex content digests.
 
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -55,11 +57,18 @@ pub fn read_session_logs(
     if let Some(expected_hash) = output_ref.strip_prefix("sha256:") {
         return match read_legacy_log_file(repo_root, session_id, Some(expected_hash)) {
             Ok(content) => Ok(content),
-            Err(file_err) => read_git_blob(repo_root, expected_hash).map_err(|_| file_err),
+            Err(file_err) if looks_like_sha1_oid(expected_hash) => {
+                read_git_blob(repo_root, expected_hash).map_err(|_| file_err)
+            }
+            Err(file_err) => Err(file_err),
         };
     }
 
     read_git_blob(repo_root, output_ref)
+}
+
+fn looks_like_sha1_oid(value: &str) -> bool {
+    value.len() == 40 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 fn log_path(repo_root: &Path, session_id: &str) -> PathBuf {
@@ -229,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_session_logs_supports_sha256_prefixed_git_blob_refs() {
+    fn test_read_session_logs_supports_sha256_prefixed_sha1_git_blob_refs() {
         let temp_dir = std::env::temp_dir().join("brat-logs-test-prefixed-git-blob");
         let _ = fs::remove_dir_all(&temp_dir);
         fs::create_dir_all(&temp_dir).unwrap();
@@ -254,6 +263,20 @@ mod tests {
         let read_content =
             read_session_logs(&temp_dir, "unused-session-id", &format!("sha256:{}", oid)).unwrap();
         assert_eq!(read_content, content);
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_read_session_logs_does_not_fallback_sha256_digest_shaped_refs_to_git_blob() {
+        let temp_dir = std::env::temp_dir().join("brat-logs-test-no-digest-blob-fallback");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+        init_git_repo(&temp_dir);
+
+        let canonical_like = format!("sha256:{}", "a".repeat(64));
+        let result = read_session_logs(&temp_dir, "unused-session-id", &canonical_like);
+        assert!(result.is_err());
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

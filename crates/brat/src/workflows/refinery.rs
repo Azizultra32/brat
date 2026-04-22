@@ -653,9 +653,11 @@ fn resolve_target_branch(
         return Ok(configured.to_string());
     }
 
-    detect_origin_head_branch(repo_root).ok_or_else(|| {
+    detect_origin_head_branch(repo_root)
+        .or_else(|| detect_origin_head_branch_from_remote_show(repo_root))
+        .ok_or_else(|| {
         WorkflowError::GitFailed(
-            "unable to resolve refinery target branch from origin/HEAD; set [refinery].target_branch explicitly".to_string(),
+            "unable to resolve refinery target branch from origin/HEAD or `git remote show origin`; set [refinery].target_branch explicitly".to_string(),
         )
     })
 }
@@ -686,7 +688,6 @@ fn parse_origin_head_ref(output: &str) -> Option<String> {
     })
 }
 
-#[cfg(test)]
 fn parse_remote_show_head_branch(output: &str) -> Option<String> {
     output.lines().find_map(|line| {
         let trimmed = line.trim();
@@ -701,7 +702,6 @@ fn parse_remote_show_head_branch(output: &str) -> Option<String> {
     })
 }
 
-#[cfg(test)]
 fn detect_origin_head_branch_from_remote_show(repo_root: &std::path::Path) -> Option<String> {
     let remote_show = Command::new("git")
         .args(["remote", "show", "origin"])

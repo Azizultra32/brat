@@ -14,8 +14,8 @@ This doc defines how the Refinery manages merge state using labels and comments.
 - Defined in `.brat/config.toml` under `[refinery].required_checks`.
 - If checks fail, the task moves to `merge:failed`.
 - If checks are missing or still pending, Refinery requeues the task at `merge:queued`.
-- Refinery integrates into `[refinery].target_branch`, which defaults to `"auto"` and resolves from local `origin/HEAD`.
-- If `origin/HEAD` is unavailable, Refinery fails closed and requires an explicit branch in config.
+- Refinery integrates into `[refinery].target_branch`, which defaults to `"auto"` and resolves from local `origin/HEAD`, then `git remote show origin`.
+- If neither source yields a default branch, Refinery fails closed and requires an explicit branch in config.
 
 ## Retry policy (default)
 

@@ -126,7 +126,7 @@ Merge queue settings.
 | `rebase_strategy` | string | `"rebase"` | Strategy: `rebase`, `squash`, `merge` |
 | `required_checks` | array | `["tests"]` | Required CI checks before merge |
 | `merge_retry_limit` | int | `2` | Max retry attempts for conflicts |
-| `target_branch` | string | `"auto"` | Integration branch or `auto` to resolve from local `origin/HEAD`; errors if unresolved |
+| `target_branch` | string | `"auto"` | Integration branch or `auto` to resolve from local `origin/HEAD`, then `git remote show origin`; errors if unresolved |
 
 ### `[locks]`
 
