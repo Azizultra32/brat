@@ -1,12 +1,19 @@
 //! Session command handler.
 
+use std::process::{Command as ProcessCommand, Stdio};
 use std::time::Duration;
 
-use libbrat_engine::platform::{process_exists, send_term_signal, wait_for_process_exit};
+use libbrat_engine::platform::{
+    configure_detached_process, process_exists, send_term_signal, wait_for_process_exit,
+};
+use libbrat_gritee::SessionStatus;
 use libbrat_session::read_session_logs;
 use serde::Serialize;
 
-use crate::cli::{Cli, SessionCommand, SessionListArgs, SessionShowArgs, SessionStopArgs, SessionTailArgs};
+use crate::cli::{
+    Cli, SessionCommand, SessionFinalizeStopArgs, SessionListArgs, SessionShowArgs,
+    SessionStopArgs, SessionTailArgs,
+};
 use crate::context::BratContext;
 use crate::error::BratError;
 use crate::output::{output_success, print_human};
@@ -85,6 +92,7 @@ pub fn run(cli: &Cli, cmd: &SessionCommand) -> Result<(), BratError> {
         SessionCommand::Show(args) => run_show(cli, args),
         SessionCommand::Stop(args) => run_stop(cli, args),
         SessionCommand::Tail(args) => run_tail(cli, args),
+        SessionCommand::FinalizeStop(args) => run_finalize_stop(cli, args),
     }
 }
 
@@ -219,7 +227,9 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
     ctx.require_gritee_initialized()?;
-    let stop_timeout = Duration::from_millis(ctx.require_initialized()?.engine.stop_timeout_ms);
+    let config = ctx.require_initialized()?;
+    let stop_timeout = Duration::from_millis(config.engine.stop_timeout_ms);
+    let finalize_timeout_ms = config.interventions.stale_session_ms;
 
     let client = ctx.gritee_client();
     let session = client.session_get(&args.session_id)?;
@@ -250,6 +260,13 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
                                 "Stop requested for session `{}` (reason: {}).",
                                 args.session_id, args.reason
                             ),
+                        )?;
+                        spawn_stop_finalizer(
+                            &ctx,
+                            &args.session_id,
+                            pid,
+                            &args.reason,
+                            finalize_timeout_ms,
                         )?;
                     }
                 }
@@ -294,6 +311,63 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
 
     output_success(cli, output);
     Ok(())
+}
+
+fn run_finalize_stop(cli: &Cli, args: &SessionFinalizeStopArgs) -> Result<(), BratError> {
+    let ctx = BratContext::resolve(cli)?;
+    ctx.require_initialized()?;
+    ctx.require_gritee_initialized()?;
+
+    if !wait_for_process_exit(args.pid, Duration::from_millis(args.wait_timeout_ms)) {
+        return Ok(());
+    }
+
+    let client = ctx.gritee_client();
+    let session = client.session_get(&args.session_id)?;
+    if session.status == SessionStatus::Exit {
+        return Ok(());
+    }
+
+    client.session_exit(
+        &args.session_id,
+        -1,
+        &args.reason,
+        session.last_output_ref.as_deref(),
+    )?;
+
+    Ok(())
+}
+
+fn spawn_stop_finalizer(
+    ctx: &BratContext,
+    session_id: &str,
+    pid: u32,
+    reason: &str,
+    wait_timeout_ms: u64,
+) -> Result<(), BratError> {
+    let brat_bin = std::env::current_exe()
+        .map_err(|e| BratError::Other(format!("failed to get current exe: {}", e)))?;
+
+    let mut cmd = ProcessCommand::new(brat_bin);
+    cmd.current_dir(&ctx.repo_root)
+        .arg("--quiet")
+        .arg("session")
+        .arg("finalize-stop")
+        .arg(session_id)
+        .arg("--pid")
+        .arg(pid.to_string())
+        .arg("--reason")
+        .arg(reason)
+        .arg("--wait-timeout-ms")
+        .arg(wait_timeout_ms.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    configure_detached_process(&mut cmd);
+
+    cmd.spawn()
+        .map(|_| ())
+        .map_err(|e| BratError::Other(format!("failed to spawn stop finalizer: {}", e)))
 }
 
 /// Run the session tail command.

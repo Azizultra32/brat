@@ -5,9 +5,10 @@ use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use libbrat_engine::platform::{process_exists, send_term_signal, wait_for_process_exit};
-use libbrat_gritee::SessionStatus;
+use libbrat_gritee::{GriteeClient, SessionStatus};
 use libbrat_session::read_session_logs;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::api::state::DaemonState;
@@ -246,10 +247,48 @@ async fn stop_session(
     }
 
     if signal_sent {
+        spawn_stop_reconciler(
+            ctx.path.clone(),
+            session_id.clone(),
+            session.pid.expect("signal_sent requires a live pid"),
+            req.reason.clone(),
+            ctx.config.interventions.stale_session_ms,
+        );
         Ok(StatusCode::ACCEPTED)
     } else {
         Ok(StatusCode::NO_CONTENT)
     }
+}
+
+fn spawn_stop_reconciler(
+    repo_root: PathBuf,
+    session_id: String,
+    pid: u32,
+    reason: String,
+    wait_timeout_ms: u64,
+) {
+    tokio::task::spawn_blocking(move || {
+        if !wait_for_process_exit(pid, Duration::from_millis(wait_timeout_ms)) {
+            return;
+        }
+
+        let client = GriteeClient::new(&repo_root);
+        let session = match client.session_get(&session_id) {
+            Ok(session) => session,
+            Err(_) => return,
+        };
+
+        if session.status == SessionStatus::Exit {
+            return;
+        }
+
+        let _ = client.session_exit(
+            &session_id,
+            -1,
+            &reason,
+            session.last_output_ref.as_deref(),
+        );
+    });
 }
 
 /// Query parameters for getting session logs.
