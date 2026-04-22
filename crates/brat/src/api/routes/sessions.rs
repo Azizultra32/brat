@@ -254,7 +254,7 @@ async fn stop_session(
             session_id.clone(),
             session.pid.expect("signal_sent requires a live pid"),
             req.reason.clone(),
-            ctx.config.interventions.stale_session_ms,
+            ctx.config.interventions.stale_session_ms.max(1_000),
         )?;
         Ok(StatusCode::ACCEPTED)
     } else {

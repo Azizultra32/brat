@@ -693,7 +693,8 @@ fn parse_remote_show_head_branch(output: &str) -> Option<String> {
         let trimmed = line.trim();
         trimmed.strip_prefix("HEAD branch:").and_then(|branch| {
             let branch = branch.trim();
-            if branch.is_empty() {
+            let branch_lower = branch.to_ascii_lowercase();
+            if branch.is_empty() || branch_lower == "(unknown)" || branch_lower == "unknown" {
                 None
             } else {
                 Some(branch.to_string())

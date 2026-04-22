@@ -229,7 +229,7 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     ctx.require_gritee_initialized()?;
     let config = ctx.require_initialized()?;
     let stop_timeout = Duration::from_millis(config.engine.stop_timeout_ms);
-    let finalize_timeout_ms = config.interventions.stale_session_ms;
+    let finalize_timeout_ms = normalize_finalize_timeout_ms(config.interventions.stale_session_ms);
 
     let client = ctx.gritee_client();
     let session = client.session_get(&args.session_id)?;
@@ -317,14 +317,15 @@ fn run_finalize_stop(cli: &Cli, args: &SessionFinalizeStopArgs) -> Result<(), Br
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
     ctx.require_gritee_initialized()?;
+    let wait_timeout_ms = normalize_finalize_timeout_ms(args.wait_timeout_ms);
 
-    if !wait_for_process_exit(args.pid, Duration::from_millis(args.wait_timeout_ms)) {
+    if !wait_for_process_exit(args.pid, Duration::from_millis(wait_timeout_ms)) {
         spawn_stop_finalizer(
             &ctx,
             &args.session_id,
             args.pid,
             &args.reason,
-            args.wait_timeout_ms,
+            wait_timeout_ms,
         )?;
         return Ok(());
     }
@@ -375,6 +376,10 @@ fn spawn_stop_finalizer(
     cmd.spawn()
         .map(|_| ())
         .map_err(|e| BratError::Other(format!("failed to spawn stop finalizer: {}", e)))
+}
+
+fn normalize_finalize_timeout_ms(timeout_ms: u64) -> u64 {
+    timeout_ms.max(1_000)
 }
 
 /// Run the session tail command.
