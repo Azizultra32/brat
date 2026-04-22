@@ -53,6 +53,8 @@ pub struct RefineryConfig {
     pub required_checks: Vec<String>,
     /// Maximum merge retry attempts.
     pub merge_retry_limit: u32,
+    /// Target branch to integrate into. "auto" resolves from repo metadata.
+    pub target_branch: String,
     /// Lock policy string ("off", "warn", "require").
     pub lock_policy: String,
 }
@@ -65,6 +67,7 @@ impl RefineryConfig {
             rebase_strategy: config.refinery.rebase_strategy.clone(),
             required_checks: config.refinery.required_checks.clone(),
             merge_retry_limit: config.refinery.merge_retry_limit,
+            target_branch: config.refinery.target_branch.clone(),
             lock_policy: config.locks.policy.clone(),
         }
     }
@@ -115,6 +118,8 @@ enum MergeOutcome {
 pub struct RefineryWorkflow {
     /// Configuration.
     config: RefineryConfig,
+    /// Resolved integration branch for this workflow instance.
+    target_branch: String,
     /// Gritee client for task/session queries.
     gritee: Arc<GriteeClient>,
     /// Repository root path.
@@ -133,13 +138,19 @@ pub struct RefineryWorkflow {
 
 impl RefineryWorkflow {
     /// Create a new RefineryWorkflow.
-    pub fn new(config: RefineryConfig, gritee: GriteeClient, repo_root: PathBuf) -> Self {
+    pub fn new(
+        config: RefineryConfig,
+        gritee: GriteeClient,
+        repo_root: PathBuf,
+    ) -> Result<Self, WorkflowError> {
+        let target_branch = resolve_target_branch(&repo_root, &config.target_branch)?;
         let gritee = Arc::new(gritee);
         let lock_helper = LockHelper::from_config(Arc::clone(&gritee), &config.lock_policy);
         let event_emitter = EventEmitter::new();
 
-        Self {
+        Ok(Self {
             config,
+            target_branch,
             gritee,
             repo_root,
             merge_attempts: HashMap::new(),
@@ -147,7 +158,7 @@ impl RefineryWorkflow {
             lock_helper,
             retry_schedules: HashMap::new(),
             event_emitter,
-        }
+        })
     }
 
     /// Run a single iteration of the refinery control loop.
@@ -320,7 +331,7 @@ impl RefineryWorkflow {
         let outcome = match merge_result {
             Ok((commit_sha, pre_merge_sha)) => {
                 // Merge succeeded locally, now try to push
-                match self.run_git(&["push", "origin", "main"]) {
+                match self.run_git(&["push", "origin", self.target_branch.as_str()]) {
                     Ok(_) => {
                         // Push succeeded - complete success
                         self.set_merge_label(&task.gritee_issue_id, merge_labels::SUCCEEDED)?;
@@ -526,13 +537,13 @@ impl RefineryWorkflow {
     ///
     /// Returns (commit_sha, pre_merge_sha) on success.
     async fn git_rebase_merge(&self, branch: &str) -> Result<(String, String), WorkflowError> {
-        // Checkout main and get pre-merge state
-        self.run_git(&["checkout", "main"])?;
-        self.run_git(&["pull", "--rebase", "origin", "main"])?;
+        // Checkout target branch and get pre-merge state
+        self.run_git(&["checkout", self.target_branch.as_str()])?;
+        self.run_git(&["pull", "--rebase", "origin", self.target_branch.as_str()])?;
         let pre_merge_sha = self.get_head_sha()?;
 
-        // Rebase the branch onto main
-        let rebase_result = self.run_git(&["rebase", "main", branch]);
+        // Rebase the branch onto the target branch
+        let rebase_result = self.run_git(&["rebase", self.target_branch.as_str(), branch]);
         if rebase_result.is_err() {
             // Abort rebase on conflict
             let _ = self.run_git(&["rebase", "--abort"]);
@@ -542,7 +553,7 @@ impl RefineryWorkflow {
         }
 
         // Fast-forward merge
-        self.run_git(&["checkout", "main"])?;
+        self.run_git(&["checkout", self.target_branch.as_str()])?;
         self.run_git(&["merge", "--ff-only", branch])?;
 
         // Get merge commit SHA
@@ -555,8 +566,8 @@ impl RefineryWorkflow {
     ///
     /// Returns (commit_sha, pre_merge_sha) on success.
     async fn git_merge(&self, branch: &str) -> Result<(String, String), WorkflowError> {
-        self.run_git(&["checkout", "main"])?;
-        self.run_git(&["pull", "--rebase", "origin", "main"])?;
+        self.run_git(&["checkout", self.target_branch.as_str()])?;
+        self.run_git(&["pull", "--rebase", "origin", self.target_branch.as_str()])?;
         let pre_merge_sha = self.get_head_sha()?;
 
         // Merge with merge commit
@@ -572,8 +583,8 @@ impl RefineryWorkflow {
     ///
     /// Returns (commit_sha, pre_merge_sha) on success.
     async fn git_squash_merge(&self, branch: &str) -> Result<(String, String), WorkflowError> {
-        self.run_git(&["checkout", "main"])?;
-        self.run_git(&["pull", "--rebase", "origin", "main"])?;
+        self.run_git(&["checkout", self.target_branch.as_str()])?;
+        self.run_git(&["pull", "--rebase", "origin", self.target_branch.as_str()])?;
         let pre_merge_sha = self.get_head_sha()?;
 
         // Squash merge
@@ -630,5 +641,144 @@ impl RefineryWorkflow {
     pub async fn shutdown(&self) -> Result<(), WorkflowError> {
         // Nothing to shutdown for refinery
         Ok(())
+    }
+}
+
+fn resolve_target_branch(
+    repo_root: &std::path::Path,
+    configured: &str,
+) -> Result<String, WorkflowError> {
+    let configured = configured.trim();
+    if !configured.is_empty() && configured != "auto" {
+        return Ok(configured.to_string());
+    }
+
+    detect_origin_head_branch(repo_root).ok_or_else(|| {
+        WorkflowError::GitFailed(
+            "unable to resolve refinery target branch from origin/HEAD; set [refinery].target_branch explicitly".to_string(),
+        )
+    })
+}
+
+fn detect_origin_head_branch(repo_root: &std::path::Path) -> Option<String> {
+    let output = Command::new("git")
+        .args(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"])
+        .current_dir(repo_root)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let output = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    parse_origin_head_ref(&output)
+}
+
+fn parse_origin_head_ref(output: &str) -> Option<String> {
+    output.trim().strip_prefix("refs/remotes/origin/").and_then(|branch| {
+        let branch = branch.trim();
+        if branch.is_empty() {
+            None
+        } else {
+            Some(branch.to_string())
+        }
+    })
+}
+
+#[cfg(test)]
+fn parse_remote_show_head_branch(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let trimmed = line.trim();
+        trimmed.strip_prefix("HEAD branch:").and_then(|branch| {
+            let branch = branch.trim();
+            if branch.is_empty() {
+                None
+            } else {
+                Some(branch.to_string())
+            }
+        })
+    })
+}
+
+#[cfg(test)]
+fn detect_origin_head_branch_from_remote_show(repo_root: &std::path::Path) -> Option<String> {
+    let remote_show = Command::new("git")
+        .args(["remote", "show", "origin"])
+        .current_dir(repo_root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).to_string())?;
+
+    parse_remote_show_head_branch(&remote_show)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        detect_origin_head_branch_from_remote_show, parse_origin_head_ref,
+        parse_remote_show_head_branch, resolve_target_branch,
+    };
+    use std::fs;
+
+    #[test]
+    fn parse_origin_head_ref_extracts_branch() {
+        assert_eq!(
+            parse_origin_head_ref("refs/remotes/origin/main\n"),
+            Some("main".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_remote_show_head_branch_extracts_branch() {
+        let output = "  HEAD branch: develop\n  Remote branches:\n    develop tracked\n";
+        assert_eq!(
+            parse_remote_show_head_branch(output),
+            Some("develop".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_target_branch_prefers_explicit_config() {
+        let temp_dir = std::env::temp_dir().join("brat-refinery-target-branch-explicit");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        assert_eq!(
+            resolve_target_branch(&temp_dir, "release").unwrap(),
+            "release".to_string()
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn resolve_target_branch_errors_when_auto_cannot_resolve() {
+        let temp_dir = std::env::temp_dir().join("brat-refinery-target-branch-auto");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let err = resolve_target_branch(&temp_dir, "auto").unwrap_err();
+        assert!(matches!(err, WorkflowError::GitFailed(_)));
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn detect_origin_head_branch_from_remote_show_parses_branch() {
+        let temp_dir = std::env::temp_dir().join("brat-refinery-remote-show-helper");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Helper is only compiled in tests and exists to keep parser coverage for
+        // prior expected output shapes without using it in production resolution.
+        let _ = detect_origin_head_branch_from_remote_show(&temp_dir);
+        assert_eq!(
+            parse_remote_show_head_branch("  HEAD branch: trunk\n"),
+            Some("trunk".to_string())
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

@@ -28,8 +28,9 @@ idle_timeout_secs = 900
 
 [swarm]
 max_polecats = 6
-worktree_root = ".grite/worktrees"
+worktree_root = ".gritee/worktrees"
 engine = "claude"
+engine_args = []
 
 [engine]
 default = "claude"
@@ -45,6 +46,7 @@ max_parallel_merges = 2
 rebase_strategy = "rebase"
 required_checks = ["tests"]
 merge_retry_limit = 2
+target_branch = "auto"
 
 [locks]
 policy = "warn"
@@ -89,8 +91,9 @@ Polecat session management.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `max_polecats` | int | `6` | Max concurrent polecat sessions |
-| `worktree_root` | string | `".grite/worktrees"` | Directory for session worktrees |
+| `worktree_root` | string | `".gritee/worktrees"` | Directory for session worktrees |
 | `engine` | string | `"claude"` | Default AI engine for polecats |
+| `engine_args` | array | `[]` | Extra arguments passed to the configured witness engine; cleared when CLI overrides to a different engine |
 
 ### `[engine]`
 
@@ -106,7 +109,12 @@ AI engine timeouts and retry settings.
 | `health_timeout_ms` | int | `5000` | Timeout for health checks |
 | `spawn_retry` | int | `1` | Number of spawn retries |
 
-Supported engines: `claude`, `aider`, `opencode`, `codex`, `continue`, `gemini`, `copilot`
+Supported engines: `claude`, `claude-code`, `aider`, `opencode`, `codex`, `continue`, `gemini`, `copilot`, `shell`
+
+For `engine = "shell"`:
+
+- `engine_args = []` runs a built-in deterministic smoke worker.
+- non-empty `engine_args` are treated as the argv passed to the platform shell executable.
 
 ### `[refinery]`
 
@@ -118,6 +126,7 @@ Merge queue settings.
 | `rebase_strategy` | string | `"rebase"` | Strategy: `rebase`, `squash`, `merge` |
 | `required_checks` | array | `["tests"]` | Required CI checks before merge |
 | `merge_retry_limit` | int | `2` | Max retry attempts for conflicts |
+| `target_branch` | string | `"auto"` | Integration branch or `auto` to resolve from local `origin/HEAD`; errors if unresolved |
 
 ### `[locks]`
 

@@ -1,8 +1,9 @@
 //! Session command handler.
 
-use std::process::Command;
 use std::time::Duration;
 
+use libbrat_engine::platform::send_term_signal;
+use libbrat_session::read_session_logs;
 use serde::Serialize;
 
 use crate::cli::{Cli, SessionCommand, SessionListArgs, SessionShowArgs, SessionStopArgs, SessionTailArgs};
@@ -220,24 +221,39 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     ctx.require_gritee_initialized()?;
 
     let client = ctx.gritee_client();
+    let session = client.session_get(&args.session_id)?;
+    let mut exit_posted = false;
 
-    // Record the session exit in Grite
-    client.session_exit(&args.session_id, 0, &args.reason, None)?;
+    if session.status != libbrat_gritee::SessionStatus::Exit {
+        if let Some(pid) = session.pid {
+            send_term_signal(pid)
+                .map_err(|e| BratError::GriteeCommandFailed(format!("failed to signal session process: {}", e)))?;
+        }
+
+        // Record the administrative stop request in Grite while preserving any
+        // existing log reference.
+        client.session_exit(
+            &args.session_id,
+            -1,
+            &args.reason,
+            session.last_output_ref.as_deref(),
+        )?;
+        exit_posted = true;
+    }
 
     if !cli.json && !cli.quiet {
-        print_human(
-            cli,
-            &format!(
-                "Stopped session {} (reason: {})",
-                args.session_id, args.reason
-            ),
-        );
+        let message = if exit_posted {
+            format!("Stopped session {} (reason: {})", args.session_id, args.reason)
+        } else {
+            format!("Session {} already exited", args.session_id)
+        };
+        print_human(cli, &message);
     }
 
     let output = SessionStopOutput {
         session_id: args.session_id.clone(),
         reason: args.reason.clone(),
-        exit_posted: true,
+        exit_posted,
     };
 
     output_success(cli, output);
@@ -271,8 +287,10 @@ fn run_tail(cli: &Cli, args: &SessionTailArgs) -> Result<(), BratError> {
         }
     };
 
-    // Read the log content from git blob
-    let log_content = read_blob(&ctx.repo_root, &last_output_ref)?;
+    // Read the logs using the canonical sha256/file contract, with raw blob refs
+    // accepted as a compatibility path.
+    let log_content = read_session_logs(&ctx.repo_root, &args.session_id, &last_output_ref)
+        .map_err(BratError::GriteeCommandFailed)?;
 
     // Split into lines and get the last N
     let all_lines: Vec<&str> = log_content.lines().collect();
@@ -332,7 +350,7 @@ fn run_tail_follow(
         if let Some(ref ref_str) = session.last_output_ref {
             // If ref changed or this is first check, read new content
             if last_ref.as_ref() != Some(ref_str) || last_ref.is_none() {
-                if let Ok(log_content) = read_blob(repo_root, ref_str) {
+                if let Ok(log_content) = read_session_logs(repo_root, session_id, ref_str) {
                     let lines: Vec<&str> = log_content.lines().collect();
 
                     // Output only new lines
@@ -360,29 +378,4 @@ fn run_tail_follow(
     }
 
     Ok(())
-}
-
-/// Read blob content from git.
-fn read_blob(repo_root: &std::path::Path, blob_ref: &str) -> Result<String, BratError> {
-    // The blob ref might be in format "sha256:xxxx" or just a git hash
-    let hash = if let Some(stripped) = blob_ref.strip_prefix("sha256:") {
-        stripped
-    } else {
-        blob_ref
-    };
-
-    let output = Command::new("git")
-        .args(["cat-file", "blob", hash])
-        .current_dir(repo_root)
-        .output()
-        .map_err(|e| BratError::GriteeCommandFailed(format!("failed to read blob: {}", e)))?;
-
-    if !output.status.success() {
-        return Err(BratError::GriteeCommandFailed(format!(
-            "blob not found: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }

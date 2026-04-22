@@ -54,7 +54,7 @@ async fn run_refinery(cli: &Cli, args: &RefineryRunArgs) -> Result<(), BratError
     let gritee = ctx.gritee_client();
 
     // Create workflow
-    let mut workflow = RefineryWorkflow::new(refinery_config, gritee, ctx.repo_root.clone());
+    let mut workflow = RefineryWorkflow::new(refinery_config, gritee, ctx.repo_root.clone())?;
 
     if args.once {
         // Single iteration mode

@@ -101,6 +101,7 @@ pub struct SwarmConfig {
     pub max_polecats: u32,
     pub worktree_root: String,
     pub engine: String,
+    pub engine_args: Vec<String>,
 }
 
 impl Default for SwarmConfig {
@@ -109,6 +110,7 @@ impl Default for SwarmConfig {
             max_polecats: 6,
             worktree_root: ".gritee/worktrees".to_string(),
             engine: "codex".to_string(),
+            engine_args: Vec::new(),
         }
     }
 }
@@ -146,6 +148,7 @@ pub struct RefineryConfig {
     pub rebase_strategy: String,
     pub required_checks: Vec<String>,
     pub merge_retry_limit: u32,
+    pub target_branch: String,
 }
 
 impl Default for RefineryConfig {
@@ -155,6 +158,7 @@ impl Default for RefineryConfig {
             rebase_strategy: "rebase".to_string(),
             required_checks: vec!["tests".to_string()],
             merge_retry_limit: 2,
+            target_branch: "auto".to_string(),
         }
     }
 }
@@ -302,6 +306,12 @@ impl BratConfig {
             }
         }
 
+        if self.refinery.target_branch.trim().is_empty() {
+            return Err(ConfigError::ValidationError(
+                "refinery.target_branch must be non-empty or 'auto'".to_string(),
+            ));
+        }
+
         Ok(())
     }
 }
@@ -324,6 +334,17 @@ mod tests {
         let toml_str = toml::to_string_pretty(&config).unwrap();
         assert!(toml_str.contains("[roles]"));
         assert!(toml_str.contains("mayor_enabled = true"));
+        assert!(toml_str.contains("engine_args = []"));
+        assert!(toml_str.contains("target_branch = \"auto\""));
+    }
+
+    #[test]
+    fn test_validate_rejects_empty_target_branch() {
+        let mut config = BratConfig::default();
+        config.refinery.target_branch = "   ".to_string();
+
+        let err = config.validate().unwrap_err();
+        assert!(matches!(err, ConfigError::ValidationError(_)));
     }
 
     #[test]

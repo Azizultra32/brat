@@ -48,5 +48,5 @@ pub use config::MonitorConfig;
 pub use error::SessionMonitorError;
 pub use event::MonitorEvent;
 pub use handle::MonitorHandle;
-pub use logs::write_session_logs;
+pub use logs::{read_session_logs, write_session_logs};
 pub use monitor::SessionMonitor;

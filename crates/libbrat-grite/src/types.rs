@@ -468,7 +468,7 @@ pub struct Session {
     /// Exit reason (signal, timeout, crash, user-stop, completed).
     pub exit_reason: Option<String>,
 
-    /// Reference to last output (sha256:<hex>).
+    /// Reference to last output (canonical sha256:<hex>; raw blob refs allowed for compatibility).
     pub last_output_ref: Option<String>,
 }
 

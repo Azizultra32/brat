@@ -4,9 +4,10 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use libbrat_engine::platform::send_term_signal;
 use libbrat_gritee::SessionStatus;
+use libbrat_session::read_session_logs;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 
 use crate::api::state::DaemonState;
 
@@ -174,9 +175,33 @@ async fn stop_session(
         )
     })?;
 
-    // Use session_exit with exit code -1 to indicate user stop
+    let session = ctx.gritee.session_get(&session_id).map_err(|e| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: format!("Session not found: {}", e),
+            }),
+        )
+    })?;
+
+    if session.status == SessionStatus::Exit {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    if let Some(pid) = session.pid {
+        send_term_signal(pid).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to signal session process: {}", e),
+                }),
+            )
+        })?;
+    }
+
+    // Record the administrative stop request in Grite.
     ctx.gritee
-        .session_exit(&session_id, -1, &req.reason, None)
+        .session_exit(&session_id, -1, &req.reason, session.last_output_ref.as_deref())
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -208,31 +233,6 @@ pub struct SessionLogsResponse {
     pub lines: Vec<String>,
     /// Whether there are more lines available.
     pub has_more: bool,
-}
-
-/// Read blob content from git.
-fn read_blob(repo_root: &std::path::Path, blob_ref: &str) -> Result<String, String> {
-    // The blob ref might be in format "sha256:xxxx" or just a git hash
-    let hash = if let Some(stripped) = blob_ref.strip_prefix("sha256:") {
-        stripped
-    } else {
-        blob_ref
-    };
-
-    let output = Command::new("git")
-        .args(["cat-file", "blob", hash])
-        .current_dir(repo_root)
-        .output()
-        .map_err(|e| format!("failed to read blob: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "blob not found: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 /// GET /api/v1/repos/:repo_id/sessions/:session_id/logs
@@ -282,8 +282,9 @@ async fn get_session_logs(
         )
     })?;
 
-    // Read the blob
-    let content = read_blob(&ctx.path, &output_ref).map_err(|e| {
+    // Read the logs using the canonical sha256/file contract, with raw blob refs
+    // accepted as a compatibility path.
+    let content = read_session_logs(&ctx.path, &session_id, &output_ref).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
