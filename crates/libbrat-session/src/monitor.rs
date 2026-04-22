@@ -8,6 +8,7 @@ use std::time::Instant;
 use libbrat_engine::{Engine, SessionHandle, SpawnSpec, StopMode};
 use libbrat_grite::{
     generate_session_id, GriteeClient, SessionRole, SessionStatus, SessionType, StateMachine,
+    TaskStatus,
 };
 use libbrat_worktree::WorktreeManager;
 use tokio::sync::{broadcast, mpsc, watch, RwLock};
@@ -134,7 +135,8 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         // 2. Create worktree if polecat session
         let (worktree_path, spawn_spec) = if session_type == SessionType::Polecat {
             if let Some(wm) = &self.worktree_manager {
-                let path = wm.create(&session_id)?;
+                let branch_name = format!("task-{}", task_id);
+                let path = wm.create(&session_id, Some(&branch_name))?;
                 let new_spec = SpawnSpec::new(&spec.command)
                     .working_dir(&path)
                     .args(spec.args.clone())
@@ -252,6 +254,74 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         })
     }
 
+    /// Poll all tracked sessions once and immediately finalize any that have exited.
+    ///
+    /// This is useful for short-lived sessions in one-shot command flows where the
+    /// background health poll interval may be longer than the command lifetime.
+    pub async fn reconcile_exited_sessions(&self) {
+        let tracked = {
+            let sessions = self.sessions.read().await;
+            sessions
+                .iter()
+                .map(|(session_id, state)| {
+                    (
+                        session_id.clone(),
+                        state.task_id.clone(),
+                        state.engine_handle.clone(),
+                        state.worktree_path.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for (session_id, task_id, engine_handle, worktree_path) in tracked {
+            let health = match self.engine.health(&engine_handle).await {
+                Ok(health) => health,
+                Err(_) => continue,
+            };
+
+            if health.alive {
+                continue;
+            }
+
+            Self::handle_exit(
+                &self.gritee,
+                &self.engine,
+                &engine_handle,
+                &self.worktree_manager,
+                &self.config,
+                &session_id,
+                &task_id,
+                health.exit_code.unwrap_or(-1),
+                health
+                    .exit_reason
+                    .as_deref()
+                    .unwrap_or("reconciled exit"),
+                &self.event_tx,
+            )
+            .await;
+
+            let state = {
+                let mut sessions = self.sessions.write().await;
+                sessions.remove(&session_id)
+            };
+
+            if let Some(state) = state {
+                state.task_handle.abort();
+            }
+
+            if self.config.cleanup_worktrees {
+                if let (Some(wm), Some(_path)) = (&self.worktree_manager, worktree_path) {
+                    if wm.remove(&session_id).is_ok() {
+                        let _ = self.event_tx.send(MonitorEvent::WorktreeCleaned {
+                            session_id: session_id.clone(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     /// Graceful shutdown of all sessions.
     pub async fn shutdown(&self) -> Result<(), SessionMonitorError> {
         // Signal shutdown
@@ -309,7 +379,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         worktree_manager: Option<Arc<WorktreeManager>>,
         config: MonitorConfig,
         session_id: String,
-        _task_id: String,
+        task_id: String,
         engine_handle: SessionHandle,
         worktree_path: Option<PathBuf>,
         mut command_rx: mpsc::Receiver<MonitorCommand>,
@@ -369,6 +439,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                                 &worktree_manager,
                                 &config,
                                 &session_id,
+                                &task_id,
                                 exit_code,
                                 &exit_reason,
                                 &event_tx,
@@ -394,6 +465,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                                     &worktree_manager,
                                     &config,
                                     &session_id,
+                                    &task_id,
                                     -1,
                                     &format!("health check timeout: {}", e),
                                     &event_tx,
@@ -456,6 +528,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                                 &worktree_manager,
                                 &config,
                                 &session_id,
+                                &task_id,
                                 0,
                                 "shutdown",
                                 &event_tx,
@@ -476,6 +549,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                             &worktree_manager,
                             &config,
                             &session_id,
+                            &task_id,
                             0,
                             "monitor shutdown",
                             &event_tx,
@@ -516,6 +590,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         _worktree_manager: &Option<Arc<WorktreeManager>>,
         config: &MonitorConfig,
         session_id: &str,
+        task_id: &str,
         exit_code: i32,
         exit_reason: &str,
         event_tx: &broadcast::Sender<MonitorEvent>,
@@ -540,6 +615,18 @@ impl<E: Engine + 'static> SessionMonitor<E> {
 
         // Update Grite with log reference
         let _ = gritee.session_exit(session_id, exit_code, exit_reason, last_output_ref.as_deref());
+
+        // Advance the task out of Running once the session has finished.
+        let next_task_status = if exit_code == 0 {
+            TaskStatus::NeedsReview
+        } else {
+            TaskStatus::Blocked
+        };
+        if let Ok(task) = gritee.task_get(task_id) {
+            if task.status == TaskStatus::Running {
+                let _ = gritee.task_update_status(task_id, next_task_status);
+            }
+        }
 
         // Emit event
         let _ = event_tx.send(MonitorEvent::Exited {

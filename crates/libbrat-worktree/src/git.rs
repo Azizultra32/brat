@@ -58,6 +58,20 @@ impl GitWorktree {
         self.run(&args)
     }
 
+    /// Add a new worktree checked out on a freshly created branch.
+    pub fn add_branch(
+        &self,
+        path: &Path,
+        branch: &str,
+        start_point: &str,
+    ) -> Result<(), WorktreeError> {
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| WorktreeError::InvalidPath(path.display().to_string()))?;
+
+        self.run(&["worktree", "add", "-b", branch, path_str, start_point])
+    }
+
     /// List all worktrees in porcelain format.
     pub fn list(&self) -> Result<Vec<WorktreeEntry>, WorktreeError> {
         let output = self.run_output(&["worktree", "list", "--porcelain"])?;

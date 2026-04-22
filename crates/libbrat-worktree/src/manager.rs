@@ -106,7 +106,7 @@ impl WorktreeManager {
     /// # Returns
     ///
     /// The absolute path to the created worktree.
-    pub fn create(&self, session_id: &str) -> Result<PathBuf, WorktreeError> {
+    pub fn create(&self, session_id: &str, branch_name: Option<&str>) -> Result<PathBuf, WorktreeError> {
         // Validate session ID format
         if !is_valid_session_id(session_id) {
             return Err(WorktreeError::InvalidSessionId(session_id.to_string()));
@@ -132,8 +132,12 @@ impl WorktreeManager {
         // Ensure worktree root exists
         fs::create_dir_all(&self.worktree_root)?;
 
-        // Create the worktree with detached HEAD
-        self.git.add(&worktree_path, "HEAD", true)?;
+        // Create the worktree either detached or on a task branch.
+        if let Some(branch_name) = branch_name {
+            self.git.add_branch(&worktree_path, branch_name, "HEAD")?;
+        } else {
+            self.git.add(&worktree_path, "HEAD", true)?;
+        }
 
         Ok(worktree_path)
     }

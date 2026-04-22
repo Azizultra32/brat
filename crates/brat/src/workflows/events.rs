@@ -3,6 +3,7 @@
 //! When the daemon is running, workflows can emit events that are broadcast
 //! to all connected WebSocket clients for real-time UI updates.
 
+use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -57,18 +58,8 @@ impl EventEmitter {
 
     /// Check if the daemon is running.
     fn check_daemon_health(port: u16) -> bool {
-        let url = format!("http://127.0.0.1:{}/api/v1/health", port);
-
-        // Use a blocking client with short timeout
-        let client = match reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(1))
-            .build()
-        {
-            Ok(c) => c,
-            Err(_) => return false,
-        };
-
-        client.get(&url).send().map(|r| r.status().is_success()).unwrap_or(false)
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        TcpStream::connect_timeout(&addr, Duration::from_secs(1)).is_ok()
     }
 
     /// Emit a task updated event.
@@ -161,33 +152,46 @@ impl EventEmitter {
             return;
         }
 
-        // Use a blocking client since we're in sync context
-        let client = match reqwest::blocking::Client::builder()
-            .timeout(BROADCAST_TIMEOUT)
-            .build()
-        {
-            Ok(c) => c,
+        let daemon_url = self.daemon_url.clone();
+        let body = match serde_json::to_vec(event) {
+            Ok(body) => body,
             Err(e) => {
-                warn!("Failed to create HTTP client for event broadcast: {}", e);
+                warn!("Failed to serialize event broadcast payload: {}", e);
                 return;
             }
         };
 
-        match client
-            .post(&self.daemon_url)
-            .json(event)
-            .send()
-        {
-            Ok(response) => {
-                if !response.status().is_success() {
-                    warn!("Event broadcast failed with status: {}", response.status());
+        // Fire-and-forget on a plain thread so workflow code never drops
+        // reqwest's blocking runtime from inside Tokio's async context.
+        std::thread::spawn(move || {
+            let client = match reqwest::blocking::Client::builder()
+                .timeout(BROADCAST_TIMEOUT)
+                .build()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    warn!("Failed to create HTTP client for event broadcast: {}", e);
+                    return;
+                }
+            };
+
+            match client
+                .post(&daemon_url)
+                .header("content-type", "application/json")
+                .body(body)
+                .send()
+            {
+                Ok(response) => {
+                    if !response.status().is_success() {
+                        warn!("Event broadcast failed with status: {}", response.status());
+                    }
+                }
+                Err(e) => {
+                    // Don't warn on connection errors - daemon might have stopped.
+                    debug!("Event broadcast failed: {}", e);
                 }
             }
-            Err(e) => {
-                // Don't warn on connection errors - daemon might have stopped
-                debug!("Event broadcast failed: {}", e);
-            }
-        }
+        });
     }
 }
 

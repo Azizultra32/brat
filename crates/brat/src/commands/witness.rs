@@ -221,6 +221,11 @@ async fn run_witness_loop<E: Engine + 'static>(
     if args.once {
         // Single iteration mode
         let result = workflow.run_once().await?;
+        if result.sessions_spawned > 0 {
+            workflow
+                .settle_fast_exits(5, Duration::from_millis(100))
+                .await;
+        }
         output_witness_result(cli, &result);
 
         let output = WitnessRunOutput {

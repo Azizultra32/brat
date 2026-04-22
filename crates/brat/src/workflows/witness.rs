@@ -162,7 +162,32 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
             }
         }
 
+        // Short-lived sessions, especially the built-in shell smoke worker, can
+        // exit before the background health poll fires. Reconcile them now so a
+        // one-shot witness pass leaves durable task/session state behind.
+        self.monitor.reconcile_exited_sessions().await;
+        self.cleanup_exited_session_locks().await;
+
         Ok(result)
+    }
+
+    /// Give very short-lived sessions a chance to exit and reconcile before a
+    /// one-shot witness command terminates.
+    pub async fn settle_fast_exits(
+        &mut self,
+        max_checks: usize,
+        pause: Duration,
+    ) {
+        for _ in 0..max_checks {
+            self.monitor.reconcile_exited_sessions().await;
+            self.cleanup_exited_session_locks().await;
+
+            if self.monitor.list_sessions().await.is_empty() {
+                break;
+            }
+
+            tokio::time::sleep(pause).await;
+        }
     }
 
     /// Query tasks with status:queued or status:running, in topological order.
