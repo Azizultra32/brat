@@ -257,10 +257,10 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
     /// Spawn a new polecat session for a task.
     async fn spawn_session_for_task(&mut self, task: &Task) -> Result<String, WorkflowError> {
-        // For AI engines, fetch full task to get body (task_list doesn't include body)
-        let is_ai_engine = matches!(self.config.engine_command.as_str(), "codex" | "claude");
+        // Every non-shell engine consumes the task through SpawnSpec.command.
+        let is_prompt_engine = self.config.engine_command != "shell";
         let is_shell_engine = self.config.engine_command == "shell";
-        let full_task = if is_ai_engine && task.body.is_empty() {
+        let full_task = if is_prompt_engine && task.body.is_empty() {
             self.gritee.task_get(&task.task_id)?
         } else {
             task.clone()
@@ -277,8 +277,8 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         let ttl_ms = (self.config.session_timeout_minutes as i64 + 5) * 60 * 1000;
         let acquired_locks = self.lock_helper.acquire_locks(&lock_resources, ttl_ms)?;
 
-        let spec = if is_ai_engine {
-            // AI engines receive the task as a prompt string.
+        let spec = if is_prompt_engine {
+            // Prompt-driven engines receive the task body via SpawnSpec.command.
             let command = format!("Task: {}\n\n{}", full_task.title, &full_task.body);
             SpawnSpec::new(command)
                 .args(self.config.engine_args.clone())

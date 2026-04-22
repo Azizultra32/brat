@@ -101,6 +101,38 @@ pub fn send_term_signal(pid: u32) -> Result<(), String> {
     Ok(())
 }
 
+/// Check whether a process currently exists.
+#[cfg(unix)]
+pub fn process_exists(pid: u32) -> bool {
+    use nix::errno::Errno;
+    use nix::sys::signal::kill;
+    use nix::unistd::Pid;
+
+    match kill(Pid::from_raw(pid as i32), None) {
+        Ok(()) => true,
+        Err(Errno::EPERM) => true,
+        Err(Errno::ESRCH) => false,
+        Err(_) => false,
+    }
+}
+
+#[cfg(windows)]
+pub fn process_exists(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        CloseHandle(handle);
+        true
+    }
+}
+
 /// Get the shell command and arguments for running commands.
 ///
 /// On Unix: Returns `("bash", &["-l", "-c"])` for login shell.
@@ -151,5 +183,10 @@ mod tests {
         assert!(is_unix());
         #[cfg(windows)]
         assert!(!is_unix());
+    }
+
+    #[test]
+    fn test_process_exists_invalid_pid_is_false() {
+        assert!(!process_exists(u32::MAX));
     }
 }

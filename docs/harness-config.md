@@ -92,7 +92,7 @@ Polecat session management.
 |-----|------|---------|-------------|
 | `max_polecats` | int | `6` | Max concurrent polecat sessions |
 | `worktree_root` | string | `".gritee/worktrees"` | Directory for session worktrees |
-| `engine` | string | `"claude"` | Default AI engine for polecats |
+| `engine` | string | `"codex"` | Default AI engine for polecats |
 | `engine_args` | array | `[]` | Extra arguments passed to the configured witness engine; cleared when CLI overrides to a different engine |
 
 ### `[engine]`
@@ -101,7 +101,7 @@ AI engine timeouts and retry settings.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `default` | string | `"claude"` | Default AI coding engine |
+| `default` | string | `"codex"` | Default AI coding engine |
 | `spawn_timeout_ms` | int | `60000` | Timeout for spawning engine |
 | `send_timeout_ms` | int | `5000` | Timeout for sending prompts |
 | `tail_timeout_ms` | int | `10000` | Timeout for reading output |

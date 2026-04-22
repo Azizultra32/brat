@@ -4,7 +4,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use libbrat_engine::platform::send_term_signal;
+use libbrat_engine::platform::{process_exists, send_term_signal};
 use libbrat_gritee::SessionStatus;
 use libbrat_session::read_session_logs;
 use serde::{Deserialize, Serialize};
@@ -188,28 +188,43 @@ async fn stop_session(
         return Ok(StatusCode::NO_CONTENT);
     }
 
+    let mut exit_posted = false;
+
     if let Some(pid) = session.pid {
-        send_term_signal(pid).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: format!("Failed to signal session process: {}", e),
-                }),
-            )
-        })?;
+        if process_exists(pid) {
+            if let Err(e) = send_term_signal(pid) {
+                if !process_exists(pid) {
+                    exit_posted = true;
+                } else {
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: format!("Failed to signal session process: {}", e),
+                        }),
+                    ));
+                }
+            }
+        } else {
+            exit_posted = true;
+        }
+    } else {
+        exit_posted = true;
     }
 
-    // Record the administrative stop request in Grite.
-    ctx.gritee
-        .session_exit(&session_id, -1, &req.reason, session.last_output_ref.as_deref())
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: format!("Failed to stop session: {}", e),
-                }),
-            )
-        })?;
+    if exit_posted {
+        // Reconcile sessions that are already dead or have no live process to
+        // wait on. Live sessions will be marked exited by the monitor path.
+        ctx.gritee
+            .session_exit(&session_id, -1, &req.reason, session.last_output_ref.as_deref())
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: format!("Failed to stop session: {}", e),
+                    }),
+                )
+            })?;
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }

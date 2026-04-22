@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use libbrat_engine::platform::send_term_signal;
+use libbrat_engine::platform::{process_exists, send_term_signal};
 use libbrat_session::read_session_logs;
 use serde::Serialize;
 
@@ -223,27 +223,50 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     let client = ctx.gritee_client();
     let session = client.session_get(&args.session_id)?;
     let mut exit_posted = false;
+    let mut signal_sent = false;
 
     if session.status != libbrat_gritee::SessionStatus::Exit {
         if let Some(pid) = session.pid {
-            send_term_signal(pid)
-                .map_err(|e| BratError::GriteeCommandFailed(format!("failed to signal session process: {}", e)))?;
+            if process_exists(pid) {
+                if let Err(e) = send_term_signal(pid) {
+                    if !process_exists(pid) {
+                        exit_posted = true;
+                    } else {
+                        return Err(BratError::GriteeCommandFailed(format!(
+                            "failed to signal session process: {}",
+                            e
+                        )));
+                    }
+                } else {
+                    signal_sent = true;
+                }
+            } else {
+                exit_posted = true;
+            }
+        } else {
+            exit_posted = true;
         }
 
-        // Record the administrative stop request in Grite while preserving any
-        // existing log reference.
-        client.session_exit(
-            &args.session_id,
-            -1,
-            &args.reason,
-            session.last_output_ref.as_deref(),
-        )?;
-        exit_posted = true;
+        if exit_posted {
+            // Reconcile sessions that are already dead or have no live process
+            // to wait on. Live sessions will be marked exited by the monitor.
+            client.session_exit(
+                &args.session_id,
+                -1,
+                &args.reason,
+                session.last_output_ref.as_deref(),
+            )?;
+        }
     }
 
     if !cli.json && !cli.quiet {
         let message = if exit_posted {
             format!("Stopped session {} (reason: {})", args.session_id, args.reason)
+        } else if signal_sent {
+            format!(
+                "Sent stop signal to session {} (reason: {})",
+                args.session_id, args.reason
+            )
         } else {
             format!("Session {} already exited", args.session_id)
         };
