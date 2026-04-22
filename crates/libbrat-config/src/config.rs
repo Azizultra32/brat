@@ -4,7 +4,7 @@ use std::path::Path;
 /// Brat harness configuration.
 ///
 /// This is stored in `.brat/config.toml` and controls harness behavior.
-/// Grite configuration remains separate in `.git/gritee/config.toml`.
+/// Grite configuration remains separate in `.git/grite/config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct BratConfig {

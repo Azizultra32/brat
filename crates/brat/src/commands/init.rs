@@ -1,6 +1,4 @@
 use std::path::Path;
-use std::process::Command;
-
 use libbrat_config::BratConfig;
 use serde::Serialize;
 
@@ -8,6 +6,7 @@ use crate::agents_md::BRAT_AGENTS_SECTION;
 use crate::cli::{Cli, InitArgs};
 use crate::context::BratContext;
 use crate::error::BratError;
+use crate::grite_cli::new_grite_command;
 use crate::output::{output_success, print_human};
 
 /// Action taken for AGENTS.md
@@ -123,16 +122,15 @@ pub fn run(cli: &Cli, args: &InitArgs) -> Result<(), BratError> {
 ///
 /// Calls `gritee init` as a subprocess and parses the output.
 fn init_gritee(ctx: &BratContext, no_agents_md: bool) -> Result<(bool, Option<String>), BratError> {
-    // Check if grite is already initialized by looking for .git/gritee/
-    let gritee_dir = ctx.git_dir.join("gritee");
-    if gritee_dir.exists() {
+    // Accept both current (.git/grite/) and legacy (.git/gritee/) layouts.
+    if ctx.is_gritee_initialized() {
         // Already initialized, try to get the actor ID
         let actor_id = get_gritee_actor_id(ctx)?;
         return Ok((false, actor_id));
     }
 
     // Run gritee init
-    let mut cmd = Command::new("gritee");
+    let mut cmd = new_grite_command();
     cmd.arg("init").arg("--json");
     if no_agents_md {
         cmd.arg("--no-agents-md");
@@ -157,7 +155,7 @@ fn init_gritee(ctx: &BratContext, no_agents_md: bool) -> Result<(bool, Option<St
 
 /// Get the current gritee actor ID.
 fn get_gritee_actor_id(ctx: &BratContext) -> Result<Option<String>, BratError> {
-    let output = Command::new("gritee")
+    let output = new_grite_command()
         .args(["actor", "current", "--json"])
         .current_dir(&ctx.repo_root)
         .output()

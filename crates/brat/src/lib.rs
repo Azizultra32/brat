@@ -3,3 +3,4 @@
 //! This library provides the API server and daemon functionality.
 
 pub mod api;
+pub mod grite_cli;

@@ -5,6 +5,7 @@ mod commands;
 mod context;
 mod daemon;
 mod error;
+mod grite_cli;
 mod output;
 mod workflows;
 

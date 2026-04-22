@@ -70,7 +70,7 @@ fn test_doctor_rebuild_recovers_state() {
     println!("Status before: {}", status_before_str.lines().count());
 
     // Try to corrupt local sled cache if it exists
-    let sled_path = repo.path.join(".git/gritee/db");
+    let sled_path = repo.path.join(".git/grite/sled/db");
     if sled_path.exists() {
         println!("Corrupting sled cache at {:?}", sled_path);
         if let Err(e) = std::fs::remove_dir_all(&sled_path) {

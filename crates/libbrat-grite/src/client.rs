@@ -289,7 +289,7 @@ impl GriteeClient {
 
     /// Check if Grite is initialized in the repository.
     pub fn is_initialized(&self, git_dir: &Path) -> bool {
-        git_dir.join("gritee").exists()
+        git_dir.join("grite").exists() || git_dir.join("gritee").exists()
     }
 
     /// Get the repository root path.

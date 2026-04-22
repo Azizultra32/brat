@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::process::Command;
 use std::time::Duration;
 
 use chrono::Utc;
@@ -13,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::cli::{Cli, StatusArgs};
 use crate::context::BratContext;
 use crate::error::BratError;
+use crate::grite_cli::new_grite_command;
 use crate::output::{clear_screen, output_stream, output_success};
 
 /// Output of the status command.
@@ -406,7 +406,7 @@ struct GriteLockError {
 ///
 /// Shells out to `gritee lock status --json`.
 fn query_locks(repo_root: &std::path::Path) -> Vec<LockStatus> {
-    let output = Command::new("gritee")
+    let output = new_grite_command()
         .args(["lock", "status", "--json"])
         .current_dir(repo_root)
         .output();

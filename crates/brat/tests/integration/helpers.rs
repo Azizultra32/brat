@@ -1,8 +1,10 @@
 //! Test helpers for integration tests.
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
+use brat::grite_cli::resolve_grite_command;
 use tempfile::TempDir;
 
 /// Get the path to the built brat binary.
@@ -15,6 +17,10 @@ fn brat_bin() -> PathBuf {
     path.push("debug");
     path.push("brat");
     path
+}
+
+fn grite_bin() -> OsString {
+    resolve_grite_command()
 }
 
 /// A temporary git repository with Brat and Grite initialized.
@@ -50,7 +56,17 @@ impl TestRepo {
         run_cmd_expect(&path, "git", &["commit", "-m", "Initial commit"]);
 
         // Initialize gritee (no daemon, no agents.md for clean testing)
-        run_cmd_expect(&path, "gritee", &["init", "--no-daemon", "--no-agents-md"]);
+        let output = Command::new(grite_bin())
+            .args(["init", "--no-daemon", "--no-agents-md"])
+            .env("GRITE_NO_DAEMON", "1")
+            .current_dir(&path)
+            .output()
+            .expect("run grite init");
+        assert!(
+            output.status.success(),
+            "grite init failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Initialize brat (no daemon, no tmux, no agents.md for isolated testing)
         run_cmd_expect(&path, brat_bin().to_str().unwrap(), &["init", "--no-daemon", "--no-tmux", "--no-agents-md"]);
@@ -165,7 +181,7 @@ impl TestRepo {
     pub fn gritee(&self, args: &[&str]) -> Output {
         let mut full_args = vec!["--no-daemon"];
         full_args.extend(args);
-        Command::new("gritee")
+        Command::new(grite_bin())
             .args(&full_args)
             .current_dir(&self.path)
             .output()

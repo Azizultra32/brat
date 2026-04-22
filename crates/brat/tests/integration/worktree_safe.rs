@@ -6,7 +6,7 @@
 //!
 //! Note: Currently Brat requires initialization per worktree since
 //! .brat/ config is stored in the worktree root. This test verifies
-//! that git metadata (refs/gritee/*) is properly shared across worktrees.
+//! that git metadata in `.git/grite/` is properly shared across worktrees.
 
 use std::process::Command;
 
@@ -43,12 +43,11 @@ fn test_worktree_safe_metadata() {
         wt_status_str
     );
 
-    // Verify gritee data directory is accessible (shared via .git)
-    // Note: gritee uses sled database in .git/gritee/, not git refs
-    let gritee_dir = repo.path.join(".git/gritee");
+    // Verify grite data directory is accessible (shared via .git)
+    let gritee_dir = repo.path.join(".git/grite");
     assert!(
         gritee_dir.exists(),
-        "gritee data directory should exist in main repo"
+        "grite data directory should exist in main repo"
     );
 
     // Final check - main repo still clean

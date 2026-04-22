@@ -79,7 +79,7 @@ impl BratContext {
 
     /// Check if Grite is initialized in this repository.
     pub fn is_gritee_initialized(&self) -> bool {
-        self.git_dir.join("gritee").exists()
+        self.git_dir.join("grite").exists() || self.git_dir.join("gritee").exists()
     }
 
     /// Require that Grite is initialized.

@@ -1,12 +1,11 @@
 //! Lock command handler.
 
-use std::process::Command;
-
 use serde::{Deserialize, Serialize};
 
 use crate::cli::{Cli, LockCommand, LockStatusArgs};
 use crate::context::BratContext;
 use crate::error::BratError;
+use crate::grite_cli::new_grite_command;
 use crate::output::{output_success, print_human};
 
 /// Lock info from Gritee.
@@ -97,7 +96,7 @@ fn run_status(cli: &Cli, args: &LockStatusArgs) -> Result<(), BratError> {
         .unwrap_or(0);
 
     // Shell out to gritee lock status --json
-    let gritee_output = Command::new("gritee")
+    let gritee_output = new_grite_command()
         .args(["lock", "status", "--json"])
         .current_dir(&ctx.repo_root)
         .output();
