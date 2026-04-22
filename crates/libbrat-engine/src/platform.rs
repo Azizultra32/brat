@@ -4,6 +4,7 @@
 //! signal handling, and shell command execution.
 
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 /// Configure a command to run as a detached process that survives parent exit.
 ///
@@ -36,10 +37,10 @@ pub fn configure_detached_process(cmd: &mut Command) {
 #[cfg(unix)]
 pub fn send_signal(pid: u32, signal: i32) -> Result<(), String> {
     use nix::sys::signal::{kill, Signal};
-    use nix::unistd::Pid;
 
     let sig = Signal::try_from(signal).map_err(|_| format!("invalid signal: {}", signal))?;
-    kill(Pid::from_raw(pid as i32), sig).map_err(|e| format!("failed to send signal: {}", e))
+    let pid = unix_pid(pid)?;
+    kill(pid, sig).map_err(|e| format!("failed to send signal: {}", e))
 }
 
 #[cfg(windows)]
@@ -57,8 +58,10 @@ pub fn send_signal(pid: u32, _signal: i32) -> Result<(), String> {
 /// On Windows: Terminates the process.
 #[cfg(unix)]
 pub fn send_raw_signal(pid: u32, signal: i32) {
-    unsafe {
-        libc::kill(pid as i32, signal);
+    if let Ok(pid) = unix_pid(pid) {
+        unsafe {
+            libc::kill(pid.as_raw(), signal);
+        }
     }
 }
 
@@ -74,10 +77,9 @@ pub fn send_raw_signal(pid: u32, _signal: i32) {
 #[cfg(unix)]
 pub fn send_term_signal(pid: u32) -> Result<(), String> {
     use nix::sys::signal::{kill, Signal};
-    use nix::unistd::Pid;
+    let pid = unix_pid(pid)?;
 
-    kill(Pid::from_raw(pid as i32), Signal::SIGTERM)
-        .map_err(|e| format!("failed to send SIGTERM: {}", e))
+    kill(pid, Signal::SIGTERM).map_err(|e| format!("failed to send SIGTERM: {}", e))
 }
 
 #[cfg(windows)]
@@ -99,6 +101,64 @@ pub fn send_term_signal(pid: u32) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Check whether a process currently exists.
+#[cfg(unix)]
+pub fn process_exists(pid: u32) -> bool {
+    use nix::errno::Errno;
+    use nix::sys::signal::kill;
+
+    let pid = match unix_pid(pid) {
+        Ok(pid) => pid,
+        Err(_) => return false,
+    };
+
+    match kill(pid, None) {
+        Ok(()) => true,
+        Err(Errno::EPERM) => true,
+        Err(Errno::ESRCH) => false,
+        Err(_) => false,
+    }
+}
+
+#[cfg(unix)]
+fn unix_pid(pid: u32) -> Result<nix::unistd::Pid, String> {
+    if pid == 0 || pid > i32::MAX as u32 {
+        return Err(format!("invalid pid: {}", pid));
+    }
+
+    Ok(nix::unistd::Pid::from_raw(pid as i32))
+}
+
+#[cfg(windows)]
+pub fn process_exists(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return false;
+        }
+        CloseHandle(handle);
+        true
+    }
+}
+
+/// Wait for a process to exit, polling until the timeout elapses.
+pub fn wait_for_process_exit(pid: u32, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        if !process_exists(pid) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    !process_exists(pid)
 }
 
 /// Get the shell command and arguments for running commands.
@@ -151,5 +211,10 @@ mod tests {
         assert!(is_unix());
         #[cfg(windows)]
         assert!(!is_unix());
+    }
+
+    #[test]
+    fn test_process_exists_invalid_pid_is_false() {
+        assert!(!process_exists(u32::MAX));
     }
 }

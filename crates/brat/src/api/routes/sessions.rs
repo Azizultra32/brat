@@ -4,9 +4,14 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use libbrat_engine::platform::{
+    configure_detached_process, process_exists, send_term_signal, wait_for_process_exit,
+};
 use libbrat_gritee::SessionStatus;
+use libbrat_session::read_session_logs;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use std::process::{Command as ProcessCommand, Stdio};
+use std::time::Duration;
 
 use crate::api::state::DaemonState;
 
@@ -174,19 +179,173 @@ async fn stop_session(
         )
     })?;
 
-    // Use session_exit with exit code -1 to indicate user stop
-    ctx.gritee
-        .session_exit(&session_id, -1, &req.reason, None)
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: format!("Failed to stop session: {}", e),
-                }),
-            )
-        })?;
+    let session = ctx.gritee.session_get(&session_id).map_err(|e| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: format!("Session not found: {}", e),
+            }),
+        )
+    })?;
 
-    Ok(StatusCode::NO_CONTENT)
+    if session.status == SessionStatus::Exit {
+        return Ok(StatusCode::NO_CONTENT);
+    }
+
+    let mut exit_posted = false;
+    let mut signal_sent = false;
+
+    if let Some(pid) = session.pid {
+        if process_exists(pid) {
+            if let Err(e) = send_term_signal(pid) {
+                if !process_exists(pid) {
+                    exit_posted = true;
+                } else {
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: format!("Failed to signal session process: {}", e),
+                        }),
+                    ));
+                }
+            } else if wait_for_process_exit(pid, Duration::from_millis(ctx.config.engine.stop_timeout_ms)) {
+                exit_posted = true;
+            } else {
+                ctx.gritee
+                    .issue_comment(
+                        &session.gritee_issue_id,
+                        &format!("Stop requested for session `{}` (reason: {}).", session_id, req.reason),
+                    )
+                    .map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse {
+                                error: format!("Failed to record stop request: {}", e),
+                            }),
+                        )
+                    })?;
+                signal_sent = true;
+            }
+        } else {
+            exit_posted = true;
+        }
+    } else {
+        exit_posted = true;
+    }
+
+    if exit_posted {
+        // Reconcile sessions that are already dead or have no live process to
+        // wait on. Live sessions will be marked exited by the monitor path.
+        ctx.gritee
+            .session_exit(&session_id, -1, &req.reason, session.last_output_ref.as_deref())
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: format!("Failed to stop session: {}", e),
+                    }),
+                )
+            })?;
+    }
+
+    if signal_sent {
+        spawn_stop_reconciler(
+            &ctx.path,
+            session_id.clone(),
+            session.pid.expect("signal_sent requires a live pid"),
+            req.reason.clone(),
+            ctx.config.interventions.stale_session_ms.max(1_000),
+            deferred_stop_retry_deadline_ms(ctx.config.interventions.stale_session_ms.max(1_000)),
+        )?;
+        Ok(StatusCode::ACCEPTED)
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
+}
+
+fn spawn_stop_reconciler(
+    repo_root: &std::path::Path,
+    session_id: String,
+    pid: u32,
+    reason: String,
+    wait_timeout_ms: u64,
+    retry_deadline_ms: u64,
+) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
+    let brat_bin = resolve_brat_cli_binary().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to locate brat CLI binary: {}", e),
+            }),
+        )
+    })?;
+
+    let mut cmd = ProcessCommand::new(brat_bin);
+    cmd.current_dir(repo_root)
+        .arg("--quiet")
+        .arg("--repo")
+        .arg(repo_root)
+        .arg("session")
+        .arg("finalize-stop")
+        .arg(session_id)
+        .arg("--pid")
+        .arg(pid.to_string())
+        .arg("--reason")
+        .arg(reason)
+        .arg("--wait-timeout-ms")
+        .arg(wait_timeout_ms.to_string())
+        .arg("--retry-deadline-ms")
+        .arg(retry_deadline_ms.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    configure_detached_process(&mut cmd);
+
+    cmd.spawn().map(|_| ()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Failed to spawn stop finalizer: {}", e),
+            }),
+        )
+    })
+}
+
+fn deferred_stop_retry_deadline_ms(wait_timeout_ms: u64) -> u64 {
+    let budget_ms = wait_timeout_ms.saturating_mul(2).max(60_000);
+    current_time_ms().saturating_add(budget_ms)
+}
+
+fn current_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn resolve_brat_cli_binary() -> Result<std::path::PathBuf, String> {
+    let current = std::env::current_exe()
+        .map_err(|e| format!("failed to resolve current executable: {}", e))?;
+
+    let file_name = current
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "current executable has no valid filename".to_string())?;
+
+    if file_name == format!("bratd{}", std::env::consts::EXE_SUFFIX) {
+        let sibling = current.with_file_name(format!("brat{}", std::env::consts::EXE_SUFFIX));
+        if sibling.exists() {
+            return Ok(sibling);
+        }
+
+        return Err(format!(
+            "current executable is {}, but sibling brat binary was not found at {}",
+            file_name,
+            sibling.display()
+        ));
+    }
+
+    Ok(current)
 }
 
 /// Query parameters for getting session logs.
@@ -208,31 +367,6 @@ pub struct SessionLogsResponse {
     pub lines: Vec<String>,
     /// Whether there are more lines available.
     pub has_more: bool,
-}
-
-/// Read blob content from git.
-fn read_blob(repo_root: &std::path::Path, blob_ref: &str) -> Result<String, String> {
-    // The blob ref might be in format "sha256:xxxx" or just a git hash
-    let hash = if let Some(stripped) = blob_ref.strip_prefix("sha256:") {
-        stripped
-    } else {
-        blob_ref
-    };
-
-    let output = Command::new("git")
-        .args(["cat-file", "blob", hash])
-        .current_dir(repo_root)
-        .output()
-        .map_err(|e| format!("failed to read blob: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "blob not found: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 /// GET /api/v1/repos/:repo_id/sessions/:session_id/logs
@@ -282,8 +416,9 @@ async fn get_session_logs(
         )
     })?;
 
-    // Read the blob
-    let content = read_blob(&ctx.path, &output_ref).map_err(|e| {
+    // Read the logs using the canonical sha256/file contract, with raw blob refs
+    // accepted as a compatibility path.
+    let content = read_session_logs(&ctx.path, &session_id, &output_ref).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {

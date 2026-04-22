@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use libbrat_config::BratConfig;
-use libbrat_engine::{Engine, SpawnSpec};
+use libbrat_engine::{platform::get_shell_command, Engine, SpawnSpec};
 use libbrat_gritee::{GriteeClient, SessionRole, SessionStatus, SessionType, Task, TaskStatus};
 use libbrat_session::{MonitorConfig, MonitorHandle, SessionMonitor};
 use libbrat_worktree::WorktreeManager;
@@ -40,7 +40,7 @@ impl WitnessConfig {
         Self {
             max_polecats: config.swarm.max_polecats,
             engine_command: config.swarm.engine.clone(),
-            engine_args: Vec::new(),
+            engine_args: config.swarm.engine_args.clone(),
             monitor_config: MonitorConfig::default()
                 .heartbeat_interval(Duration::from_millis(
                     config.interventions.heartbeat_interval_ms,
@@ -257,9 +257,10 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
     /// Spawn a new polecat session for a task.
     async fn spawn_session_for_task(&mut self, task: &Task) -> Result<String, WorkflowError> {
-        // For AI engines, fetch full task to get body (task_list doesn't include body)
-        let is_ai_engine = matches!(self.config.engine_command.as_str(), "codex" | "claude");
-        let full_task = if is_ai_engine && task.body.is_empty() {
+        // Every non-shell engine consumes the task through SpawnSpec.command.
+        let is_prompt_engine = self.config.engine_command != "shell";
+        let is_shell_engine = self.config.engine_command == "shell";
+        let full_task = if task.body.is_empty() {
             self.gritee.task_get(&task.task_id)?
         } else {
             task.clone()
@@ -276,22 +277,35 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         let ttl_ms = (self.config.session_timeout_minutes as i64 + 5) * 60 * 1000;
         let acquired_locks = self.lock_helper.acquire_locks(&lock_resources, ttl_ms)?;
 
-        // Build spawn spec - for AI engines (codex, claude), use task body as prompt
-        let command = if is_ai_engine {
-            // Construct prompt from task title and body
-            format!(
-                "Task: {}\n\n{}",
-                full_task.title,
-                &full_task.body
-            )
-        } else {
-            self.config.engine_command.clone()
-        };
+        let spec = if is_prompt_engine {
+            // Prompt-driven engines receive the task body via SpawnSpec.command.
+            let command = format!("Task: {}\n\n{}", full_task.title, &full_task.body);
+            SpawnSpec::new(command)
+                .args(self.config.engine_args.clone())
+                .arg("--task")
+                .arg(&task.task_id)
+        } else if is_shell_engine {
+            let (shell_cmd, shell_default_args) = get_shell_command();
+            let mut spec = SpawnSpec::new(shell_cmd)
+                .env("BRAT_TASK_ID", &task.task_id)
+                .env("BRAT_TASK_TITLE", &full_task.title)
+                .env("BRAT_TASK_BODY", &full_task.body);
 
-        let spec = SpawnSpec::new(command)
-            .args(self.config.engine_args.clone())
-            .arg("--task")
-            .arg(&task.task_id);
+            if self.config.engine_args.is_empty() {
+                spec = spec
+                    .args(shell_default_args.iter().copied())
+                    .arg(default_shell_smoke_script(&task.task_id));
+            } else {
+                spec = spec.args(self.config.engine_args.clone());
+            }
+
+            spec
+        } else {
+            SpawnSpec::new(self.config.engine_command.clone())
+                .args(self.config.engine_args.clone())
+                .arg("--task")
+                .arg(&task.task_id)
+        };
 
         // Spawn via SessionMonitor (handles worktree, Grite record, etc.)
         let handle = match self
@@ -396,5 +410,19 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
     pub async fn shutdown(&self) -> Result<(), WorkflowError> {
         self.monitor.shutdown().await?;
         Ok(())
+    }
+}
+
+fn default_shell_smoke_script(task_id: &str) -> String {
+    if cfg!(windows) {
+        format!(
+            "if not exist smoke mkdir smoke && echo %BRAT_TASK_ID%> smoke\\worker.txt && git add smoke\\worker.txt && git commit -m \"Witness smoke task {}\"",
+            task_id
+        )
+    } else {
+        format!(
+            "mkdir -p smoke && printf '%s\\n' \"$BRAT_TASK_ID\" > smoke/worker.txt && git add smoke/worker.txt && git commit -m 'Witness smoke task {}'",
+            task_id
+        )
     }
 }

@@ -75,7 +75,7 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
     }
 
     // Build workflow config
-    let witness_config = WitnessConfig::from_brat_config(config);
+    let base_witness_config = WitnessConfig::from_brat_config(config);
 
     // Create GriteeClient and WorktreeManager
     let gritee = ctx.gritee_client();
@@ -94,6 +94,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
             if !cli.quiet && !cli.json {
                 print_human(cli, "Using Codex engine");
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "codex");
             let engine = CodexEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
@@ -102,6 +104,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
             if !cli.quiet && !cli.json {
                 print_human(cli, "Using Claude Code engine");
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "claude");
             let engine = ClaudeCodeEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
@@ -110,6 +114,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
             if !cli.quiet && !cli.json {
                 print_human(cli, "Using OpenCode engine (open source Claude Code alternative)");
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "opencode");
             let engine = OpenCodeEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
@@ -118,6 +124,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
             if !cli.quiet && !cli.json {
                 print_human(cli, "Using Aider engine");
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "aider");
             let engine = AiderEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
@@ -126,6 +134,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
             if !cli.quiet && !cli.json {
                 print_human(cli, "Using Gemini engine (Google's Gemini CLI)");
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "gemini");
             let engine = GeminiEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
@@ -134,6 +144,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
             if !cli.quiet && !cli.json {
                 print_human(cli, "Using GitHub Copilot CLI engine");
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "copilot");
             let engine = CopilotEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
@@ -142,6 +154,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
             if !cli.quiet && !cli.json {
                 print_human(cli, "Using Continue.dev engine");
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "continue");
             let engine = ContinueEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
@@ -150,6 +164,8 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
             if !cli.quiet && !cli.json {
                 print_human(cli, "Using Shell engine");
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "shell");
             let engine = ShellEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
@@ -165,10 +181,34 @@ async fn run_witness(cli: &Cli, args: &WitnessRunArgs) -> Result<(), BratError> 
                     ),
                 );
             }
+            let witness_config =
+                resolved_witness_config(&base_witness_config, &config.swarm.engine, "claude");
             let engine = ClaudeCodeEngine::new();
             let workflow = WitnessWorkflow::new(witness_config, gritee, engine, worktree_manager);
             run_witness_loop(cli, args, workflow).await
         }
+    }
+}
+
+fn resolved_witness_config(
+    base: &WitnessConfig,
+    configured_engine: &str,
+    resolved_engine: &str,
+) -> WitnessConfig {
+    let mut config = base.clone();
+    config.engine_command = resolved_engine.to_string();
+
+    if canonical_engine_name(configured_engine) != canonical_engine_name(resolved_engine) {
+        config.engine_args.clear();
+    }
+
+    config
+}
+
+fn canonical_engine_name(engine: &str) -> String {
+    match engine.to_lowercase().as_str() {
+        "claude-code" => "claude".to_string(),
+        other => other.to_string(),
     }
 }
 

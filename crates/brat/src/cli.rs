@@ -374,6 +374,9 @@ pub enum SessionCommand {
     Stop(SessionStopArgs),
     /// Tail session logs
     Tail(SessionTailArgs),
+    /// Internal helper for reconciling a deferred stop.
+    #[command(hide = true)]
+    FinalizeStop(SessionFinalizeStopArgs),
 }
 
 /// Arguments for session list
@@ -415,6 +418,29 @@ pub struct SessionTailArgs {
     /// Follow log output (stream new lines)
     #[arg(long, short = 'f')]
     pub follow: bool,
+}
+
+/// Arguments for the hidden session finalize-stop helper.
+#[derive(Parser, Debug)]
+pub struct SessionFinalizeStopArgs {
+    /// Session ID to reconcile.
+    pub session_id: String,
+
+    /// Process ID to wait on.
+    #[arg(long)]
+    pub pid: u32,
+
+    /// Reason to record if reconciliation succeeds.
+    #[arg(long, default_value = "user-stop")]
+    pub reason: String,
+
+    /// Maximum time to wait for process exit before giving up.
+    #[arg(long, default_value = "300000")]
+    pub wait_timeout_ms: u64,
+
+    /// Absolute unix-millis deadline after which deferred stop retries stop.
+    #[arg(long)]
+    pub retry_deadline_ms: Option<u64>,
 }
 
 /// Lock subcommands

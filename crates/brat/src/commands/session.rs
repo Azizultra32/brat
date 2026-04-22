@@ -1,11 +1,19 @@
 //! Session command handler.
 
-use std::process::Command;
+use std::process::{Command as ProcessCommand, Stdio};
 use std::time::Duration;
 
+use libbrat_engine::platform::{
+    configure_detached_process, process_exists, send_term_signal, wait_for_process_exit,
+};
+use libbrat_gritee::SessionStatus;
+use libbrat_session::read_session_logs;
 use serde::Serialize;
 
-use crate::cli::{Cli, SessionCommand, SessionListArgs, SessionShowArgs, SessionStopArgs, SessionTailArgs};
+use crate::cli::{
+    Cli, SessionCommand, SessionFinalizeStopArgs, SessionListArgs, SessionShowArgs,
+    SessionStopArgs, SessionTailArgs,
+};
 use crate::context::BratContext;
 use crate::error::BratError;
 use crate::output::{output_success, print_human};
@@ -84,6 +92,7 @@ pub fn run(cli: &Cli, cmd: &SessionCommand) -> Result<(), BratError> {
         SessionCommand::Show(args) => run_show(cli, args),
         SessionCommand::Stop(args) => run_stop(cli, args),
         SessionCommand::Tail(args) => run_tail(cli, args),
+        SessionCommand::FinalizeStop(args) => run_finalize_stop(cli, args),
     }
 }
 
@@ -218,30 +227,184 @@ fn run_stop(cli: &Cli, args: &SessionStopArgs) -> Result<(), BratError> {
     let ctx = BratContext::resolve(cli)?;
     ctx.require_initialized()?;
     ctx.require_gritee_initialized()?;
+    let config = ctx.require_initialized()?;
+    let stop_timeout = Duration::from_millis(config.engine.stop_timeout_ms);
+    let finalize_timeout_ms = normalize_finalize_timeout_ms(config.interventions.stale_session_ms);
+    let retry_deadline_ms = deferred_stop_retry_deadline_ms(finalize_timeout_ms);
 
     let client = ctx.gritee_client();
+    let session = client.session_get(&args.session_id)?;
+    let mut exit_posted = false;
+    let mut signal_sent = false;
 
-    // Record the session exit in Grite
-    client.session_exit(&args.session_id, 0, &args.reason, None)?;
+    if session.status != libbrat_gritee::SessionStatus::Exit {
+        if let Some(pid) = session.pid {
+            if process_exists(pid) {
+                if let Err(e) = send_term_signal(pid) {
+                    if !process_exists(pid) {
+                        exit_posted = true;
+                    } else {
+                        return Err(BratError::GriteeCommandFailed(format!(
+                            "failed to signal session process: {}",
+                            e
+                        )));
+                    }
+                } else {
+                    signal_sent = true;
+                    if wait_for_process_exit(pid, stop_timeout) {
+                        exit_posted = true;
+                        signal_sent = false;
+                    } else {
+                        client.issue_comment(
+                            &session.gritee_issue_id,
+                            &format!(
+                                "Stop requested for session `{}` (reason: {}).",
+                                args.session_id, args.reason
+                            ),
+                        )?;
+                        spawn_stop_finalizer(
+                            &ctx,
+                            &args.session_id,
+                            pid,
+                            &args.reason,
+                            finalize_timeout_ms,
+                            retry_deadline_ms,
+                        )?;
+                    }
+                }
+            } else {
+                exit_posted = true;
+            }
+        } else {
+            exit_posted = true;
+        }
+
+        if exit_posted {
+            // Reconcile sessions that are already dead or have no live process
+            // to wait on. Live sessions will be marked exited by the monitor.
+            client.session_exit(
+                &args.session_id,
+                -1,
+                &args.reason,
+                session.last_output_ref.as_deref(),
+            )?;
+        }
+    }
 
     if !cli.json && !cli.quiet {
-        print_human(
-            cli,
-            &format!(
-                "Stopped session {} (reason: {})",
+        let message = if exit_posted {
+            format!("Stopped session {} (reason: {})", args.session_id, args.reason)
+        } else if signal_sent {
+            format!(
+                "Sent stop signal to session {} (reason: {})",
                 args.session_id, args.reason
-            ),
-        );
+            )
+        } else {
+            format!("Session {} already exited", args.session_id)
+        };
+        print_human(cli, &message);
     }
 
     let output = SessionStopOutput {
         session_id: args.session_id.clone(),
         reason: args.reason.clone(),
-        exit_posted: true,
+        exit_posted,
     };
 
     output_success(cli, output);
     Ok(())
+}
+
+fn run_finalize_stop(cli: &Cli, args: &SessionFinalizeStopArgs) -> Result<(), BratError> {
+    let ctx = BratContext::resolve(cli)?;
+    ctx.require_initialized()?;
+    ctx.require_gritee_initialized()?;
+    let wait_timeout_ms = normalize_finalize_timeout_ms(args.wait_timeout_ms);
+    let retry_deadline_ms = args
+        .retry_deadline_ms
+        .unwrap_or_else(|| deferred_stop_retry_deadline_ms(wait_timeout_ms));
+
+    if !wait_for_process_exit(args.pid, Duration::from_millis(wait_timeout_ms)) {
+        if current_time_ms() >= retry_deadline_ms {
+            return Ok(());
+        }
+
+        spawn_stop_finalizer(
+            &ctx,
+            &args.session_id,
+            args.pid,
+            &args.reason,
+            wait_timeout_ms,
+            retry_deadline_ms,
+        )?;
+        return Ok(());
+    }
+
+    let client = ctx.gritee_client();
+    let session = client.session_get(&args.session_id)?;
+    if session.status == SessionStatus::Exit {
+        return Ok(());
+    }
+
+    client.session_exit(
+        &args.session_id,
+        -1,
+        &args.reason,
+        session.last_output_ref.as_deref(),
+    )?;
+
+    Ok(())
+}
+
+fn spawn_stop_finalizer(
+    ctx: &BratContext,
+    session_id: &str,
+    pid: u32,
+    reason: &str,
+    wait_timeout_ms: u64,
+    retry_deadline_ms: u64,
+) -> Result<(), BratError> {
+    let brat_bin = std::env::current_exe()
+        .map_err(|e| BratError::Other(format!("failed to get current exe: {}", e)))?;
+
+    let mut cmd = ProcessCommand::new(brat_bin);
+    cmd.current_dir(&ctx.repo_root)
+        .arg("--quiet")
+        .arg("session")
+        .arg("finalize-stop")
+        .arg(session_id)
+        .arg("--pid")
+        .arg(pid.to_string())
+        .arg("--reason")
+        .arg(reason)
+        .arg("--wait-timeout-ms")
+        .arg(wait_timeout_ms.to_string())
+        .arg("--retry-deadline-ms")
+        .arg(retry_deadline_ms.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    configure_detached_process(&mut cmd);
+
+    cmd.spawn()
+        .map(|_| ())
+        .map_err(|e| BratError::Other(format!("failed to spawn stop finalizer: {}", e)))
+}
+
+fn normalize_finalize_timeout_ms(timeout_ms: u64) -> u64 {
+    timeout_ms.max(1_000)
+}
+
+fn deferred_stop_retry_deadline_ms(wait_timeout_ms: u64) -> u64 {
+    let budget_ms = wait_timeout_ms.saturating_mul(2).max(60_000);
+    current_time_ms().saturating_add(budget_ms)
+}
+
+fn current_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Run the session tail command.
@@ -271,8 +434,10 @@ fn run_tail(cli: &Cli, args: &SessionTailArgs) -> Result<(), BratError> {
         }
     };
 
-    // Read the log content from git blob
-    let log_content = read_blob(&ctx.repo_root, &last_output_ref)?;
+    // Read the logs using the canonical sha256/file contract, with raw blob refs
+    // accepted as a compatibility path.
+    let log_content = read_session_logs(&ctx.repo_root, &args.session_id, &last_output_ref)
+        .map_err(BratError::GriteeCommandFailed)?;
 
     // Split into lines and get the last N
     let all_lines: Vec<&str> = log_content.lines().collect();
@@ -332,7 +497,7 @@ fn run_tail_follow(
         if let Some(ref ref_str) = session.last_output_ref {
             // If ref changed or this is first check, read new content
             if last_ref.as_ref() != Some(ref_str) || last_ref.is_none() {
-                if let Ok(log_content) = read_blob(repo_root, ref_str) {
+                if let Ok(log_content) = read_session_logs(repo_root, session_id, ref_str) {
                     let lines: Vec<&str> = log_content.lines().collect();
 
                     // Output only new lines
@@ -360,29 +525,4 @@ fn run_tail_follow(
     }
 
     Ok(())
-}
-
-/// Read blob content from git.
-fn read_blob(repo_root: &std::path::Path, blob_ref: &str) -> Result<String, BratError> {
-    // The blob ref might be in format "sha256:xxxx" or just a git hash
-    let hash = if let Some(stripped) = blob_ref.strip_prefix("sha256:") {
-        stripped
-    } else {
-        blob_ref
-    };
-
-    let output = Command::new("git")
-        .args(["cat-file", "blob", hash])
-        .current_dir(repo_root)
-        .output()
-        .map_err(|e| BratError::GriteeCommandFailed(format!("failed to read blob: {}", e)))?;
-
-    if !output.status.success() {
-        return Err(BratError::GriteeCommandFailed(format!(
-            "blob not found: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }

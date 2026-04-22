@@ -12,12 +12,15 @@ This doc defines how the Refinery manages merge state using labels and comments.
 ## Required checks
 
 - Defined in `.brat/config.toml` under `[refinery].required_checks`.
-- If checks fail or are missing, the task remains `merge:failed`.
+- If checks fail, the task moves to `merge:failed`.
+- If checks are missing or still pending, Refinery requeues the task at `merge:queued`.
+- Refinery integrates into `[refinery].target_branch`, which defaults to `"auto"` and resolves from local `origin/HEAD`, then `git remote show origin`.
+- If neither source yields a default branch, Refinery fails closed and requires an explicit branch in config.
 
 ## Retry policy (default)
 
 - Max retries: 2 (configurable via `[refinery].merge_retry_limit`)
-- Backoff: linear, 5 minutes between attempts
+- Backoff: exponential, starting at 2 minutes and doubling up to 32 minutes
 - Retry count is recorded in the merge comment block
 
 ## Merge comment format
