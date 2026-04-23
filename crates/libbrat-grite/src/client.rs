@@ -146,6 +146,7 @@ impl RawIssue {
             issue_id: self.issue_id.to_hex(),
             title: self.title,
             body: self.body,
+            comments: self.comments.into_iter().map(|c| c.body).collect(),
             state: self.state,
             labels: self.labels,
             updated_ts: self.updated_ts,
@@ -348,7 +349,11 @@ impl GriteeClient {
     pub fn issue_show(&self, issue_id: &str) -> Result<GriteeIssue, GriteeError> {
         let args = vec!["issue", "show", issue_id];
         let response: IssueShowResponse = self.run_json_direct(&args)?;
-        Ok(response.issue.into_gritee_issue())
+        let mut issue = response.issue.into_gritee_issue();
+        issue
+            .comments
+            .extend(extract_comment_bodies(response.events));
+        Ok(issue)
     }
 
     /// Add labels to an issue.
@@ -1489,9 +1494,7 @@ fn parse_latest_session_from_issue(
         .find_map(|label| label.strip_prefix("task:"))?
         .to_string();
 
-    // Try to parse session from body first, then look for most recent in comments
-    // For now, just parse from body (comments would need Gritee CLI support)
-    let data = parse_session_comment(&issue.body)?;
+    let data = latest_session_comment(issue)?;
 
     Some(Session {
         session_id: data.session_id,
@@ -1524,13 +1527,7 @@ fn parse_session_by_id_from_issue(
         .find_map(|label| label.strip_prefix("task:"))?
         .to_string();
 
-    // Parse session from body
-    let data = parse_session_comment(&issue.body)?;
-
-    // Check if this is the session we're looking for
-    if data.session_id != session_id {
-        return None;
-    }
+    let data = session_comment_by_id(issue, session_id)?;
 
     Some(Session {
         session_id: data.session_id,
@@ -1548,6 +1545,44 @@ fn parse_session_by_id_from_issue(
         exit_reason: data.exit_reason,
         last_output_ref: data.last_output_ref,
     })
+}
+
+fn extract_comment_bodies(events: Option<Vec<serde_json::Value>>) -> Vec<String> {
+    events
+        .into_iter()
+        .flatten()
+        .filter_map(|event| {
+            event
+                .get("kind")
+                .and_then(|kind| kind.get("CommentAdded"))
+                .and_then(|comment| comment.get("body"))
+                .and_then(|body| body.as_str())
+                .map(ToString::to_string)
+        })
+        .collect()
+}
+
+fn latest_session_comment(issue: &GriteeIssue) -> Option<SessionCommentData> {
+    let mut latest = parse_session_comment(&issue.body);
+    for comment in &issue.comments {
+        if let Some(data) = parse_session_comment(comment) {
+            latest = Some(data);
+        }
+    }
+    latest
+}
+
+fn session_comment_by_id(issue: &GriteeIssue, session_id: &str) -> Option<SessionCommentData> {
+    let mut latest =
+        parse_session_comment(&issue.body).filter(|data| data.session_id == session_id);
+    for comment in &issue.comments {
+        if let Some(data) = parse_session_comment(comment) {
+            if data.session_id == session_id {
+                latest = Some(data);
+            }
+        }
+    }
+    latest
 }
 
 #[cfg(test)]
@@ -1617,6 +1652,91 @@ mod tests {
         assert_eq!(parsed.exit_code, Some(1));
         assert_eq!(parsed.exit_reason, Some("timeout".to_string()));
         assert_eq!(parsed.last_output_ref, Some("sha256:abc123".to_string()));
+    }
+
+    #[test]
+    fn test_session_lookup_reads_session_comments() {
+        let spawned = Session {
+            session_id: "s-20250117-cafe".to_string(),
+            task_id: "t-20250117-beef".to_string(),
+            gritee_issue_id: "issue-456".to_string(),
+            role: SessionRole::Witness,
+            session_type: SessionType::Polecat,
+            engine: "codex".to_string(),
+            worktree: ".gritee/worktrees/s-20250117-cafe".to_string(),
+            pid: Some(12345),
+            status: SessionStatus::Spawned,
+            started_ts: 1700000000000,
+            last_heartbeat_ts: None,
+            exit_code: None,
+            exit_reason: None,
+            last_output_ref: None,
+        };
+        let mut exited = spawned.clone();
+        exited.status = SessionStatus::Exit;
+        exited.exit_code = Some(0);
+        exited.exit_reason = Some("completed successfully".to_string());
+        exited.last_output_ref = Some("sha256:abc123".to_string());
+
+        let issue = GriteeIssue {
+            issue_id: "issue-456".to_string(),
+            title: "task".to_string(),
+            body: "task body".to_string(),
+            comments: vec![
+                format_session_comment(&spawned),
+                "not a session".to_string(),
+                format_session_comment(&exited),
+            ],
+            labels: vec!["task:t-20250117-beef".to_string()],
+            state: "open".to_string(),
+            updated_ts: 1700000010000,
+        };
+        let summary = GriteeIssueSummary {
+            issue_id: "issue-456".to_string(),
+            title: "task".to_string(),
+            state: "open".to_string(),
+            labels: vec!["task:t-20250117-beef".to_string()],
+            updated_ts: 1700000010000,
+        };
+
+        let parsed =
+            parse_session_by_id_from_issue(&issue, &summary, "s-20250117-cafe").expect("session");
+
+        assert_eq!(parsed.status, SessionStatus::Exit);
+        assert_eq!(parsed.exit_code, Some(0));
+        assert_eq!(parsed.last_output_ref, Some("sha256:abc123".to_string()));
+    }
+
+    #[test]
+    fn test_extract_comment_bodies_from_events() {
+        let events = vec![
+            serde_json::json!({
+                "kind": {
+                    "CommentAdded": {
+                        "body": "first"
+                    }
+                }
+            }),
+            serde_json::json!({
+                "kind": {
+                    "LabelAdded": {
+                        "label": "status:running"
+                    }
+                }
+            }),
+            serde_json::json!({
+                "kind": {
+                    "CommentAdded": {
+                        "body": "second"
+                    }
+                }
+            }),
+        ];
+
+        assert_eq!(
+            extract_comment_bodies(Some(events)),
+            vec!["first".to_string(), "second".to_string()]
+        );
     }
 
     #[test]

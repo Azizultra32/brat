@@ -127,6 +127,8 @@ pub struct GriteeIssue {
     #[serde(default)]
     pub body: String,
     #[serde(default)]
+    pub comments: Vec<String>,
+    #[serde(default)]
     pub labels: Vec<String>,
     #[serde(default)]
     pub state: String,

@@ -8,7 +8,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use libbrat_config::BratConfig;
-use libbrat_engine::{platform::get_shell_command, Engine, SpawnSpec};
+use libbrat_engine::{
+    platform::{get_shell_command, process_exists},
+    Engine, SpawnSpec,
+};
 use libbrat_grite::{GriteeClient, SessionRole, SessionStatus, SessionType, Task, TaskStatus};
 use libbrat_session::{MonitorConfig, MonitorHandle, SessionMonitor};
 use libbrat_worktree::WorktreeManager;
@@ -288,6 +291,18 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
                 branch
             ),
         );
+        if let Ok(sessions) = self.gritee.session_list(Some(&task.task_id)) {
+            for session in sessions {
+                if session.status != SessionStatus::Exit {
+                    let _ = self.gritee.session_exit(
+                        &session.session_id,
+                        0,
+                        "orphaned running task recovered",
+                        session.last_output_ref.as_deref(),
+                    );
+                }
+            }
+        }
         self.gritee
             .task_update_status(&task.task_id, TaskStatus::NeedsReview)?;
         self.event_emitter
@@ -315,7 +330,9 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
         // Query Grite for active sessions on this task
         if let Ok(sessions) = self.gritee.session_list(Some(task_id)) {
-            return sessions.iter().any(|s| s.status != SessionStatus::Exit);
+            return sessions.iter().any(|s| {
+                s.status != SessionStatus::Exit && s.pid.map(process_exists).unwrap_or(true)
+            });
         }
 
         false
