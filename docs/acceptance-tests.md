@@ -17,3 +17,6 @@
 
 6. Doctor monotonic
    - Corrupt local sled store; `brat doctor --rebuild` restores state without rewriting refs.
+
+7. Witness branch guardrail
+   - Run an unrelated task through `brat witness --engine codex`; no-op workers and orphaned task branches without commits are blocked, while valid task branches with allowed-path changes become `needs-review`.
