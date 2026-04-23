@@ -1,7 +1,8 @@
 //! Codex engine for spawning and controlling Codex CLI sessions.
 //!
-//! This engine spawns `codex exec --yolo --json` processes for headless
-//! task execution. Output is captured and streamed as JSONL events.
+//! This engine spawns `codex exec --dangerously-bypass-approvals-and-sandbox
+//! --json` processes for headless task execution. Output is captured and
+//! streamed as JSONL events.
 //!
 //! Processes are detached using `setsid` so they survive parent exit.
 
@@ -35,7 +36,8 @@ struct SessionState {
 
 /// Codex engine for spawning Codex CLI sessions.
 ///
-/// Uses `codex exec --yolo --json` for headless execution with JSONL output.
+/// Uses `codex exec --dangerously-bypass-approvals-and-sandbox --json` for
+/// headless execution with JSONL output.
 /// Processes are detached with `setsid` so they survive parent exit.
 pub struct CodexEngine {
     /// Active sessions.
@@ -61,6 +63,55 @@ impl CodexEngine {
         format!("codex-{}-{:04x}", ts, rand)
     }
 
+    /// Filter Brat-internal spawn arguments before forwarding to Codex.
+    fn filtered_codex_args(args: &[String]) -> Vec<String> {
+        let mut filtered = Vec::new();
+        let mut skip_next = false;
+
+        for arg in args {
+            if skip_next {
+                skip_next = false;
+                continue;
+            }
+
+            if arg == "--task" {
+                skip_next = true;
+                continue;
+            }
+
+            filtered.push(arg.clone());
+        }
+
+        filtered
+    }
+
+    /// Build argv for the current Codex CLI.
+    fn build_codex_args(spec: &SpawnSpec) -> Vec<String> {
+        let mut args = vec![
+            "exec".to_string(),
+            "--dangerously-bypass-approvals-and-sandbox".to_string(),
+            "--json".to_string(),
+            "--cd".to_string(),
+            spec.working_dir.to_string_lossy().to_string(),
+        ];
+
+        args.extend(Self::filtered_codex_args(&spec.args));
+        args.push(spec.command.clone());
+        args
+    }
+
+    fn push_output_line(
+        sessions: &Arc<RwLock<HashMap<String, SessionState>>>,
+        session_id: &str,
+        text: String,
+    ) {
+        if let Ok(mut sessions) = sessions.write() {
+            if let Some(state) = sessions.get_mut(session_id) {
+                state.output_lines.push(text);
+            }
+        }
+    }
+
     /// Collect output from process in background thread.
     fn spawn_output_collector(
         sessions: Arc<RwLock<HashMap<String, SessionState>>>,
@@ -73,11 +124,7 @@ impl CodexEngine {
                 match line {
                     Ok(text) => {
                         debug!(session_id = %session_id, "codex output: {}", text);
-                        if let Ok(mut sessions) = sessions.write() {
-                            if let Some(state) = sessions.get_mut(&session_id) {
-                                state.output_lines.push(text);
-                            }
-                        }
+                        Self::push_output_line(&sessions, &session_id, text);
                     }
                     Err(e) => {
                         warn!(session_id = %session_id, "error reading codex output: {}", e);
@@ -91,13 +138,22 @@ impl CodexEngine {
     }
 
     /// Collect stderr from process in background thread.
-    fn spawn_stderr_collector(session_id: String, child_stderr: std::process::ChildStderr) {
+    fn spawn_stderr_collector(
+        sessions: Arc<RwLock<HashMap<String, SessionState>>>,
+        session_id: String,
+        child_stderr: std::process::ChildStderr,
+    ) {
         std::thread::spawn(move || {
             let reader = BufReader::new(child_stderr);
             for line in reader.lines() {
                 match line {
                     Ok(text) => {
                         warn!(session_id = %session_id, "codex stderr: {}", text);
+                        Self::push_output_line(
+                            &sessions,
+                            &session_id,
+                            format!("[stderr] {}", text),
+                        );
                     }
                     Err(e) => {
                         warn!(session_id = %session_id, "error reading codex stderr: {}", e);
@@ -121,29 +177,11 @@ impl Engine for CodexEngine {
         let session_id = Self::generate_session_id();
         info!(session_id = %session_id, working_dir = ?spec.working_dir, "spawning codex session");
 
-        // Build codex exec command via bash login shell to ensure PATH is set
-        // Escape single quotes in prompt by replacing ' with '\''
-        let escaped_prompt = spec.command.replace('\'', "'\\''");
+        let codex_args = Self::build_codex_args(&spec);
+        info!(session_id = %session_id, args = ?codex_args, "codex command");
 
-        // Filter out brat-specific args (--task, task_id) that codex doesn't understand
-        // Only include args that codex recognizes
-        let codex_args: Vec<&str> = spec.args.iter()
-            .filter(|arg| !arg.starts_with("--task") && !arg.starts_with("t-"))
-            .map(|s| s.as_str())
-            .collect();
-        let extra_args = codex_args.join(" ");
-        let shell_cmd = if extra_args.is_empty() {
-            format!("codex exec --yolo --json '{}'", escaped_prompt)
-        } else {
-            format!("codex exec --yolo --json {} '{}'", extra_args, escaped_prompt)
-        };
-
-        info!(session_id = %session_id, shell_cmd = %shell_cmd, "codex command");
-
-        let mut cmd = Command::new("bash");
-        cmd.arg("-l")
-            .arg("-c")
-            .arg(&shell_cmd);
+        let mut cmd = Command::new("codex");
+        cmd.args(&codex_args);
 
         // Set working directory
         cmd.current_dir(&spec.working_dir);
@@ -162,9 +200,9 @@ impl Engine for CodexEngine {
         crate::platform::configure_detached_process(&mut cmd);
 
         // Spawn the process
-        let mut child = cmd.spawn().map_err(|e| {
-            EngineError::SpawnFailed(format!("failed to spawn codex: {}", e))
-        })?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| EngineError::SpawnFailed(format!("failed to spawn codex: {}", e)))?;
 
         let pid = child.id();
         info!(session_id = %session_id, pid = pid, "codex process spawned");
@@ -194,31 +232,25 @@ impl Engine for CodexEngine {
         }
 
         // Start background output collector
-        Self::spawn_output_collector(
-            Arc::clone(&self.sessions),
-            session_id.clone(),
-            stdout,
-        );
+        Self::spawn_output_collector(Arc::clone(&self.sessions), session_id.clone(), stdout);
 
         // Start background stderr collector if available
         if let Some(stderr) = stderr {
-            Self::spawn_stderr_collector(session_id.clone(), stderr);
+            Self::spawn_stderr_collector(Arc::clone(&self.sessions), session_id.clone(), stderr);
         }
 
-        Ok(SpawnResult {
-            session_id,
-            pid,
-        })
+        Ok(SpawnResult { session_id, pid })
     }
 
     async fn send(&self, session: &SessionHandle, input: EngineInput) -> Result<(), EngineError> {
-        let mut sessions = self.sessions.write().map_err(|_| {
-            EngineError::SendFailed("failed to acquire session lock".to_string())
-        })?;
+        let mut sessions = self
+            .sessions
+            .write()
+            .map_err(|_| EngineError::SendFailed("failed to acquire session lock".to_string()))?;
 
-        let state = sessions.get_mut(&session.session_id).ok_or_else(|| {
-            EngineError::SessionNotFound(session.session_id.clone())
-        })?;
+        let state = sessions
+            .get_mut(&session.session_id)
+            .ok_or_else(|| EngineError::SessionNotFound(session.session_id.clone()))?;
 
         match input {
             EngineInput::Text(text) => {
@@ -237,8 +269,7 @@ impl Engine for CodexEngine {
                 }
             }
             EngineInput::Signal(sig) => {
-                crate::platform::send_signal(state.pid, sig)
-                    .map_err(EngineError::SendFailed)?;
+                crate::platform::send_signal(state.pid, sig).map_err(EngineError::SendFailed)?;
             }
         }
 
@@ -246,13 +277,14 @@ impl Engine for CodexEngine {
     }
 
     async fn tail(&self, session: &SessionHandle, n: usize) -> Result<Vec<String>, EngineError> {
-        let sessions = self.sessions.read().map_err(|_| {
-            EngineError::TailFailed("failed to acquire session lock".to_string())
-        })?;
+        let sessions = self
+            .sessions
+            .read()
+            .map_err(|_| EngineError::TailFailed("failed to acquire session lock".to_string()))?;
 
-        let state = sessions.get(&session.session_id).ok_or_else(|| {
-            EngineError::SessionNotFound(session.session_id.clone())
-        })?;
+        let state = sessions
+            .get(&session.session_id)
+            .ok_or_else(|| EngineError::SessionNotFound(session.session_id.clone()))?;
 
         let lines = &state.output_lines;
         let start = lines.len().saturating_sub(n);
@@ -260,13 +292,14 @@ impl Engine for CodexEngine {
     }
 
     async fn stop(&self, session: &SessionHandle, how: StopMode) -> Result<(), EngineError> {
-        let mut sessions = self.sessions.write().map_err(|_| {
-            EngineError::StopFailed("failed to acquire session lock".to_string())
-        })?;
+        let mut sessions = self
+            .sessions
+            .write()
+            .map_err(|_| EngineError::StopFailed("failed to acquire session lock".to_string()))?;
 
-        let state = sessions.get_mut(&session.session_id).ok_or_else(|| {
-            EngineError::SessionNotFound(session.session_id.clone())
-        })?;
+        let state = sessions
+            .get_mut(&session.session_id)
+            .ok_or_else(|| EngineError::SessionNotFound(session.session_id.clone()))?;
 
         match how {
             StopMode::Graceful => {
@@ -326,9 +359,9 @@ impl Engine for CodexEngine {
             EngineError::HealthCheckFailed("failed to acquire session lock".to_string())
         })?;
 
-        let state = sessions.get_mut(&session.session_id).ok_or_else(|| {
-            EngineError::SessionNotFound(session.session_id.clone())
-        })?;
+        let state = sessions
+            .get_mut(&session.session_id)
+            .ok_or_else(|| EngineError::SessionNotFound(session.session_id.clone()))?;
 
         // Check if process has exited
         match state.child.try_wait() {
@@ -362,5 +395,27 @@ mod tests {
     async fn test_codex_engine_creation() {
         let engine = CodexEngine::new();
         assert!(engine.sessions.read().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_codex_args_use_current_cli_contract() {
+        let spec = SpawnSpec::new("implement the task")
+            .working_dir("/tmp/brat-task")
+            .args(["--task", "t-20260423-e704", "--model", "gpt-5.4"]);
+
+        let args = CodexEngine::build_codex_args(&spec);
+
+        assert_eq!(args[0], "exec");
+        assert!(args.contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()));
+        assert!(args.contains(&"--json".to_string()));
+        assert!(!args.contains(&"--yolo".to_string()));
+        assert!(!args.contains(&"--task".to_string()));
+        assert!(!args.contains(&"t-20260423-e704".to_string()));
+        assert!(args.contains(&"--model".to_string()));
+        assert!(args.contains(&"gpt-5.4".to_string()));
+
+        let cd_index = args.iter().position(|arg| arg == "--cd").unwrap();
+        assert_eq!(args[cd_index + 1], "/tmp/brat-task");
+        assert_eq!(args.last().unwrap(), "implement the task");
     }
 }
