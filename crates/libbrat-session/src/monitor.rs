@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -629,7 +629,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         // successful process still has to pass the branch guardrail before it
         // can become merge-reviewable.
         let validation_failure = if exit_code == 0 {
-            validate_task_branch(gritee, task_id, worktree_path).err()
+            validate_task_branch_for_review(gritee, task_id, worktree_path).err()
         } else {
             None
         };
@@ -686,7 +686,12 @@ impl<E: Engine + 'static> SessionMonitor<E> {
     }
 }
 
-fn validate_task_branch(
+/// Validate that a task branch produced reviewable output.
+///
+/// Successful worker processes are not enough to make a task merge-reviewable:
+/// the task branch must contain at least one commit, change at least one file,
+/// and, when the task declares allowed paths, stay within that scope.
+pub fn validate_task_branch_for_review(
     gritee: &GriteeClient,
     task_id: &str,
     worktree_path: Option<&Path>,
@@ -695,25 +700,49 @@ fn validate_task_branch(
         return Ok(());
     };
 
+    let task_branch = format!("task-{}", task_id);
+    if worktree_path.exists() {
+        validate_task_branch_ref(gritee, task_id, worktree_path, "HEAD", true)
+    } else if git_status(gritee.repo_root(), &["rev-parse", "--verify", &task_branch]) {
+        validate_task_branch_ref(gritee, task_id, gritee.repo_root(), &task_branch, false)
+    } else {
+        Err(format!(
+            "worktree no longer exists and task branch task-{} was not found",
+            task_id
+        ))
+    }
+}
+
+/// Validate a named task branch from the repository root.
+///
+/// This is used by orphan recovery, where the worker process and temporary
+/// worktree are already gone but the task branch remains.
+pub fn validate_named_task_branch_for_review(
+    gritee: &GriteeClient,
+    task_id: &str,
+    branch: &str,
+) -> Result<(), String> {
+    if !git_status(gritee.repo_root(), &["rev-parse", "--verify", branch]) {
+        return Err(format!("task branch {} was not found", branch));
+    }
+
+    validate_task_branch_ref(gritee, task_id, gritee.repo_root(), branch, false)
+}
+
+fn validate_task_branch_ref(
+    gritee: &GriteeClient,
+    task_id: &str,
+    git_dir: &Path,
+    head_ref: &str,
+    check_dirty: bool,
+) -> Result<(), String> {
     let task = gritee
         .task_get(task_id)
         .map_err(|e| format!("failed to load task for validation: {}", e))?;
     let allowed_paths = parse_allowed_paths(&task.body);
 
-    let task_branch = format!("task-{}", task_id);
-    let (git_dir, head_ref, check_dirty) = if worktree_path.exists() {
-        (worktree_path.to_path_buf(), "HEAD".to_string(), true)
-    } else if git_status(gritee.repo_root(), &["rev-parse", "--verify", &task_branch]) {
-        (gritee.repo_root().to_path_buf(), task_branch, false)
-    } else {
-        return Err(format!(
-            "worktree no longer exists and task branch task-{} was not found",
-            task_id
-        ));
-    };
-
     if check_dirty {
-        let dirty = git_lines(&git_dir, &["status", "--porcelain"])?;
+        let dirty = git_lines(git_dir, &["status", "--porcelain"])?;
         if !dirty.is_empty() {
             return Err(format!(
                 "worker left an uncommitted worktree: {}",
@@ -722,9 +751,9 @@ fn validate_task_branch(
         }
     }
 
-    let base_ref = resolve_base_ref(&git_dir)?;
+    let base_ref = resolve_base_ref(git_dir)?;
     let commit_count = git_output(
-        &git_dir,
+        git_dir,
         &[
             "rev-list",
             "--count",
@@ -739,7 +768,7 @@ fn validate_task_branch(
     }
 
     let changed_paths = git_lines(
-        &git_dir,
+        git_dir,
         &[
             "diff",
             "--name-only",
@@ -917,6 +946,8 @@ fn git_status(worktree_path: &Path, args: &[&str]) -> bool {
     Command::new("git")
         .args(args)
         .current_dir(worktree_path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)

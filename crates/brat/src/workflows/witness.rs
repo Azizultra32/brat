@@ -13,7 +13,9 @@ use libbrat_engine::{
     Engine, SpawnSpec,
 };
 use libbrat_grite::{GriteeClient, SessionRole, SessionStatus, SessionType, Task, TaskStatus};
-use libbrat_session::{MonitorConfig, MonitorHandle, SessionMonitor};
+use libbrat_session::{
+    validate_named_task_branch_for_review, MonitorConfig, MonitorHandle, SessionMonitor,
+};
 use libbrat_worktree::WorktreeManager;
 use serde::Serialize;
 
@@ -284,29 +286,55 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
             return Ok(false);
         }
 
-        let _ = self.gritee.issue_comment(
-            &task.gritee_issue_id,
-            &format!(
-                "Witness found task branch `{}` for a running task with no active session; marking needs-review for recovery.",
+        let validation_failure =
+            validate_named_task_branch_for_review(&self.gritee, &task.task_id, &branch).err();
+        let recovered_status = if validation_failure.is_none() {
+            TaskStatus::NeedsReview
+        } else {
+            TaskStatus::Blocked
+        };
+        let recovery_comment = match &validation_failure {
+            Some(reason) => format!(
+                "Witness found task branch `{}` for a running task with no active session; blocking recovery: {}",
+                branch, reason
+            ),
+            None => format!(
+                "Witness found task branch `{}` for a running task with no active session; validated branch output and marking needs-review for recovery.",
                 branch
             ),
-        );
+        };
+        let _ = self
+            .gritee
+            .issue_comment(&task.gritee_issue_id, &recovery_comment);
+
         if let Ok(sessions) = self.gritee.session_list(Some(&task.task_id)) {
             for session in sessions {
                 if session.status != SessionStatus::Exit {
+                    let exit_code = if validation_failure.is_some() { -1 } else { 0 };
+                    let exit_reason = validation_failure
+                        .as_deref()
+                        .unwrap_or("orphaned running task recovered");
                     let _ = self.gritee.session_exit(
                         &session.session_id,
-                        0,
-                        "orphaned running task recovered",
+                        exit_code,
+                        exit_reason,
                         session.last_output_ref.as_deref(),
                     );
                 }
             }
         }
         self.gritee
-            .task_update_status(&task.task_id, TaskStatus::NeedsReview)?;
-        self.event_emitter
-            .task_updated(&task.task_id, "needs-review", Some(&task.convoy_id));
+            .task_update_status(&task.task_id, recovered_status)?;
+        let recovered_status_event = match recovered_status {
+            TaskStatus::NeedsReview => "needs-review",
+            TaskStatus::Blocked => "blocked",
+            _ => "running",
+        };
+        self.event_emitter.task_updated(
+            &task.task_id,
+            recovered_status_event,
+            Some(&task.convoy_id),
+        );
 
         Ok(true)
     }

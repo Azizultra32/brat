@@ -73,6 +73,7 @@ struct StatusTaskSummary {
 #[derive(Debug, Deserialize)]
 struct StatusTaskCounts {
     running: u32,
+    blocked: u32,
     needs_review: u32,
 }
 
@@ -215,6 +216,66 @@ fn test_witness_recovers_running_task_with_existing_branch() {
 
     let status: StatusData = repo.brat_json(&["status"]);
     assert_eq!(status.tasks.by_status.running, 0);
+    assert_eq!(status.tasks.by_status.blocked, 1);
+    assert_eq!(status.tasks.by_status.needs_review, 0);
+
+    repo.assert_git_clean();
+}
+
+#[test]
+fn test_witness_recovers_running_task_with_valid_branch_output() {
+    let repo = TestRepo::new();
+
+    let convoy: ConvoyCreateData = repo.brat_json(&[
+        "convoy",
+        "create",
+        "--title",
+        "Witness recovery valid output",
+    ]);
+    let task: TaskCreateData = repo.brat_json(&[
+        "task",
+        "create",
+        "--convoy",
+        &convoy.convoy_id,
+        "--title",
+        "Recover branch with commit",
+        "--body",
+        "Allowed paths:\n- notes/recovery.txt",
+    ]);
+
+    let update: TaskUpdateData =
+        repo.brat_json(&["task", "update", &task.task_id, "--status", "running"]);
+    assert_eq!(update.status, "running");
+
+    let branch = format!("task-{}", task.task_id);
+    repo.git_expect(&["checkout", "-b", &branch]);
+    std::fs::create_dir_all(repo.path.join("notes")).expect("create notes dir");
+    std::fs::write(repo.path.join("notes/recovery.txt"), "recovered\n")
+        .expect("write recovered output");
+    repo.git_expect(&["add", "notes/recovery.txt"]);
+    repo.git_expect(&["commit", "-m", "Recovered task output"]);
+    repo.git_expect(&["checkout", "main"]);
+
+    let witness_output =
+        repo.brat_expect(&["witness", "run", "--once", "--engine", "shell", "--json"]);
+    let stdout = String::from_utf8_lossy(&witness_output.stdout);
+    let witness = serde_json::Deserializer::from_str(&stdout)
+        .into_iter::<serde_json::Value>()
+        .last()
+        .expect("witness JSON output")
+        .expect("parse witness output");
+    let data: WitnessRunData =
+        serde_json::from_value(witness.get("data").expect("witness data").clone())
+            .expect("parse witness data");
+
+    assert_eq!(data.iterations, 1);
+    assert_eq!(data.total_tasks_found, 1);
+    assert_eq!(data.total_sessions_spawned, 0);
+    assert_eq!(data.total_errors, 0);
+
+    let status: StatusData = repo.brat_json(&["status"]);
+    assert_eq!(status.tasks.by_status.running, 0);
+    assert_eq!(status.tasks.by_status.blocked, 0);
     assert_eq!(status.tasks.by_status.needs_review, 1);
 
     repo.assert_git_clean();
