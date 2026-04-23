@@ -1,7 +1,8 @@
 //! Session monitor implementation.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -249,9 +250,9 @@ impl<E: Engine + 'static> SessionMonitor<E> {
     /// Get handle to a monitored session.
     pub async fn get_handle(&self, session_id: &str) -> Option<MonitorHandle> {
         let sessions = self.sessions.read().await;
-        sessions.get(session_id).map(|state| {
-            MonitorHandle::new(state.session_id.clone(), state.command_tx.clone())
-        })
+        sessions
+            .get(session_id)
+            .map(|state| MonitorHandle::new(state.session_id.clone(), state.command_tx.clone()))
     }
 
     /// Poll all tracked sessions once and immediately finalize any that have exited.
@@ -292,11 +293,9 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                 &self.config,
                 &session_id,
                 &task_id,
+                worktree_path.as_deref(),
                 health.exit_code.unwrap_or(-1),
-                health
-                    .exit_reason
-                    .as_deref()
-                    .unwrap_or("reconciled exit"),
+                health.exit_reason.as_deref().unwrap_or("reconciled exit"),
                 &self.event_tx,
             )
             .await;
@@ -440,6 +439,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                                 &config,
                                 &session_id,
                                 &task_id,
+                                worktree_path.as_deref(),
                                 exit_code,
                                 &exit_reason,
                                 &event_tx,
@@ -466,6 +466,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                                     &config,
                                     &session_id,
                                     &task_id,
+                                    worktree_path.as_deref(),
                                     -1,
                                     &format!("health check timeout: {}", e),
                                     &event_tx,
@@ -529,6 +530,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                                 &config,
                                 &session_id,
                                 &task_id,
+                                worktree_path.as_deref(),
                                 0,
                                 "shutdown",
                                 &event_tx,
@@ -550,6 +552,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
                             &config,
                             &session_id,
                             &task_id,
+                            worktree_path.as_deref(),
                             0,
                             "monitor shutdown",
                             &event_tx,
@@ -591,6 +594,7 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         config: &MonitorConfig,
         session_id: &str,
         task_id: &str,
+        worktree_path: Option<&Path>,
         exit_code: i32,
         exit_reason: &str,
         event_tx: &broadcast::Sender<MonitorEvent>,
@@ -614,16 +618,34 @@ impl<E: Engine + 'static> SessionMonitor<E> {
         };
 
         // Update Grite with log reference
-        let _ = gritee.session_exit(session_id, exit_code, exit_reason, last_output_ref.as_deref());
+        let _ = gritee.session_exit(
+            session_id,
+            exit_code,
+            exit_reason,
+            last_output_ref.as_deref(),
+        );
 
-        // Advance the task out of Running once the session has finished.
-        let next_task_status = if exit_code == 0 {
+        // Advance the task out of Running once the session has finished. A
+        // successful process still has to pass the branch guardrail before it
+        // can become merge-reviewable.
+        let validation_failure = if exit_code == 0 {
+            validate_task_branch(gritee, task_id, worktree_path).err()
+        } else {
+            None
+        };
+        let next_task_status = if exit_code == 0 && validation_failure.is_none() {
             TaskStatus::NeedsReview
         } else {
             TaskStatus::Blocked
         };
         if let Ok(task) = gritee.task_get(task_id) {
             if task.status == TaskStatus::Running {
+                if let Some(reason) = validation_failure {
+                    let _ = gritee.issue_comment(
+                        &task.gritee_issue_id,
+                        &format!("Worker output blocked by branch guardrail: {}", reason),
+                    );
+                }
                 let _ = gritee.task_update_status(task_id, next_task_status);
             }
         }
@@ -664,6 +686,242 @@ impl<E: Engine + 'static> SessionMonitor<E> {
     }
 }
 
+fn validate_task_branch(
+    gritee: &GriteeClient,
+    task_id: &str,
+    worktree_path: Option<&Path>,
+) -> Result<(), String> {
+    let Some(worktree_path) = worktree_path else {
+        return Ok(());
+    };
+
+    let task = gritee
+        .task_get(task_id)
+        .map_err(|e| format!("failed to load task for validation: {}", e))?;
+    let allowed_paths = parse_allowed_paths(&task.body);
+
+    let task_branch = format!("task-{}", task_id);
+    let (git_dir, head_ref, check_dirty) = if worktree_path.exists() {
+        (worktree_path.to_path_buf(), "HEAD".to_string(), true)
+    } else if git_status(gritee.repo_root(), &["rev-parse", "--verify", &task_branch]) {
+        (gritee.repo_root().to_path_buf(), task_branch, false)
+    } else {
+        return Err(format!(
+            "worktree no longer exists and task branch task-{} was not found",
+            task_id
+        ));
+    };
+
+    if check_dirty {
+        let dirty = git_lines(&git_dir, &["status", "--porcelain"])?;
+        if !dirty.is_empty() {
+            return Err(format!(
+                "worker left an uncommitted worktree: {}",
+                dirty.join(", ")
+            ));
+        }
+    }
+
+    let base_ref = resolve_base_ref(&git_dir)?;
+    let commit_count = git_output(
+        &git_dir,
+        &[
+            "rev-list",
+            "--count",
+            &format!("{}..{}", base_ref, head_ref),
+        ],
+    )?
+    .trim()
+    .parse::<usize>()
+    .map_err(|e| format!("failed to parse task branch commit count: {}", e))?;
+    if commit_count == 0 {
+        return Err("worker produced no commit on the task branch".to_string());
+    }
+
+    let changed_paths = git_lines(
+        &git_dir,
+        &[
+            "diff",
+            "--name-only",
+            &format!("{}...{}", base_ref, head_ref),
+        ],
+    )?;
+    if changed_paths.is_empty() {
+        return Err(
+            "worker commit did not change any files relative to the base branch".to_string(),
+        );
+    }
+
+    if !allowed_paths.is_empty() {
+        let out_of_scope = changed_paths
+            .iter()
+            .filter(|path| !path_is_allowed(path, &allowed_paths))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !out_of_scope.is_empty() {
+            return Err(format!(
+                "out-of-scope path(s) changed: {}. Allowed path(s): {}",
+                out_of_scope.join(", "),
+                allowed_paths.join(", ")
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_allowed_paths(body: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    let mut in_allowed_section = false;
+
+    for line in body.lines() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_lowercase();
+
+        if lower.starts_with("allowed paths:") || lower.starts_with("allowed path:") {
+            in_allowed_section = true;
+            if let Some((_, rest)) = trimmed.split_once(':') {
+                collect_path_entries(rest, &mut paths);
+            }
+            continue;
+        }
+
+        if in_allowed_section {
+            if trimmed.is_empty() {
+                break;
+            }
+            if trimmed.ends_with(':') && !trimmed.starts_with('-') && !trimmed.starts_with('*') {
+                break;
+            }
+            collect_path_entries(trimmed, &mut paths);
+        }
+    }
+
+    if paths.is_empty()
+        && body
+            .to_lowercase()
+            .contains("do not modify any other files")
+    {
+        collect_file_named_paths(body, &mut paths);
+    }
+
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
+fn collect_path_entries(text: &str, paths: &mut Vec<String>) {
+    let text = text
+        .trim()
+        .trim_start_matches('-')
+        .trim_start_matches('*')
+        .trim();
+
+    for entry in text.split(',') {
+        if let Some(path) = normalize_path_entry(entry) {
+            paths.push(path);
+        }
+    }
+}
+
+fn collect_file_named_paths(body: &str, paths: &mut Vec<String>) {
+    let mut search_offset = 0;
+    let lower = body.to_lowercase();
+    while let Some(relative) = lower[search_offset..].find("file named ") {
+        let start = search_offset + relative + "file named ".len();
+        let rest = &body[start..];
+        let candidate = rest
+            .split(|ch: char| ch.is_whitespace() || matches!(ch, ',' | ';' | ':'))
+            .next()
+            .unwrap_or_default();
+        if let Some(path) = normalize_path_entry(candidate) {
+            paths.push(path);
+        }
+        search_offset = start.saturating_add(candidate.len());
+        if search_offset >= body.len() {
+            break;
+        }
+    }
+}
+
+fn normalize_path_entry(entry: &str) -> Option<String> {
+    let path = entry
+        .trim()
+        .trim_matches('`')
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim_end_matches('.')
+        .trim()
+        .trim_start_matches("./")
+        .to_string();
+
+    if path.is_empty() || path.contains(' ') {
+        None
+    } else {
+        Some(path)
+    }
+}
+
+fn path_is_allowed(path: &str, allowed_paths: &[String]) -> bool {
+    allowed_paths.iter().any(|allowed| {
+        let allowed = allowed.trim_end_matches('/');
+        path == allowed || path.starts_with(&format!("{}/", allowed))
+    })
+}
+
+fn resolve_base_ref(worktree_path: &Path) -> Result<String, String> {
+    for candidate in [
+        "main",
+        "origin/HEAD",
+        "origin/main",
+        "master",
+        "origin/master",
+    ] {
+        if git_status(worktree_path, &["rev-parse", "--verify", candidate]) {
+            return Ok(candidate.to_string());
+        }
+    }
+
+    Err("could not resolve base branch for task branch validation".to_string())
+}
+
+fn git_lines(worktree_path: &Path, args: &[&str]) -> Result<Vec<String>, String> {
+    let output = git_output(worktree_path, args)?;
+    Ok(output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToString::to_string)
+        .collect())
+}
+
+fn git_output(worktree_path: &Path, args: &[&str]) -> Result<String, String> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(worktree_path)
+        .output()
+        .map_err(|e| format!("failed to run git {}: {}", args.join(" "), e))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(format!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
+fn git_status(worktree_path: &Path, args: &[&str]) -> bool {
+    Command::new("git")
+        .args(args)
+        .current_dir(worktree_path)
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -676,5 +934,46 @@ mod tests {
     fn test_monitor_config_default() {
         let config = MonitorConfig::default();
         assert_eq!(config.health_poll_interval, Duration::from_secs(10));
+    }
+
+    #[test]
+    fn test_parse_allowed_paths_section() {
+        let body = r#"
+Do the task.
+
+Allowed paths:
+- notes/unrelated_cli_probe.txt
+- smoke/
+
+Do not touch docs.
+"#;
+
+        assert_eq!(
+            parse_allowed_paths(body),
+            vec![
+                "notes/unrelated_cli_probe.txt".to_string(),
+                "smoke/".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_allowed_paths_from_file_named_guardrail() {
+        let body = "Create a file named notes/unrelated_cli_probe.txt containing exactly: ok. Do not modify any other files.";
+
+        assert_eq!(
+            parse_allowed_paths(body),
+            vec!["notes/unrelated_cli_probe.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_path_is_allowed_exact_file_or_directory_child() {
+        let allowed = vec!["notes/probe.txt".to_string(), "smoke/".to_string()];
+
+        assert!(path_is_allowed("notes/probe.txt", &allowed));
+        assert!(path_is_allowed("smoke/worker.txt", &allowed));
+        assert!(!path_is_allowed("docs/brat-cli.md", &allowed));
+        assert!(!path_is_allowed("notes/other.txt", &allowed));
     }
 }

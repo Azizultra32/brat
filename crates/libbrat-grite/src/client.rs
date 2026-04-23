@@ -350,9 +350,14 @@ impl GriteeClient {
         let args = vec!["issue", "show", issue_id];
         let response: IssueShowResponse = self.run_json_direct(&args)?;
         let mut issue = response.issue.into_gritee_issue();
+        if issue.body.is_empty() {
+            if let Some(body) = extract_issue_created_body(response.events.as_deref()) {
+                issue.body = body;
+            }
+        }
         issue
             .comments
-            .extend(extract_comment_bodies(response.events));
+            .extend(extract_comment_bodies(response.events.as_deref()));
         Ok(issue)
     }
 
@@ -912,7 +917,8 @@ impl GriteeClient {
             .into_iter()
             .map(|d| TaskDependency {
                 issue_id: d.issue_id,
-                dep_type: DependencyType::from_str(&d.dep_type).unwrap_or(DependencyType::RelatedTo),
+                dep_type: DependencyType::from_str(&d.dep_type)
+                    .unwrap_or(DependencyType::RelatedTo),
                 title: d.title,
             })
             .collect())
@@ -1115,9 +1121,9 @@ impl GriteeClient {
                             );
                         }
                     }
-                    return env
-                        .data
-                        .ok_or_else(|| GriteeError::UnexpectedResponse("missing data in response".into()));
+                    return env.data.ok_or_else(|| {
+                        GriteeError::UnexpectedResponse("missing data in response".into())
+                    });
                 }
                 Err(e) => {
                     if !output.status.success() {
@@ -1547,7 +1553,18 @@ fn parse_session_by_id_from_issue(
     })
 }
 
-fn extract_comment_bodies(events: Option<Vec<serde_json::Value>>) -> Vec<String> {
+fn extract_issue_created_body(events: Option<&[serde_json::Value]>) -> Option<String> {
+    events.into_iter().flatten().find_map(|event| {
+        event
+            .get("kind")
+            .and_then(|kind| kind.get("IssueCreated"))
+            .and_then(|issue| issue.get("body"))
+            .and_then(|body| body.as_str())
+            .map(ToString::to_string)
+    })
+}
+
+fn extract_comment_bodies(events: Option<&[serde_json::Value]>) -> Vec<String> {
     events
         .into_iter()
         .flatten()
@@ -1734,8 +1751,34 @@ mod tests {
         ];
 
         assert_eq!(
-            extract_comment_bodies(Some(events)),
+            extract_comment_bodies(Some(&events)),
             vec!["first".to_string(), "second".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_extract_issue_created_body_from_events() {
+        let events = vec![
+            serde_json::json!({
+                "kind": {
+                    "LabelAdded": {
+                        "label": "type:task"
+                    }
+                }
+            }),
+            serde_json::json!({
+                "kind": {
+                    "IssueCreated": {
+                        "title": "task",
+                        "body": "Allowed paths:\n- notes/probe.txt"
+                    }
+                }
+            }),
+        ];
+
+        assert_eq!(
+            extract_issue_created_body(Some(&events)),
+            Some("Allowed paths:\n- notes/probe.txt".to_string())
         );
     }
 
