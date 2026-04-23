@@ -6,3 +6,8 @@ memista.*
 ~/
 .brat
 .grite
+.gritee/
+.codex-cloud-watch/
+AGENTS.md
+error.log
+brat-ui/.run/
