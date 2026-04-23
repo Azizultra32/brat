@@ -50,14 +50,44 @@ struct RebuildData {
     overall_status: String,
 }
 
+/// Response data for witness run.
+#[derive(Debug, Deserialize)]
+struct WitnessRunData {
+    iterations: usize,
+    total_tasks_found: usize,
+    total_sessions_spawned: usize,
+    total_errors: usize,
+}
+
+/// Response data for status.
+#[derive(Debug, Deserialize)]
+struct StatusData {
+    tasks: StatusTaskSummary,
+}
+
+#[derive(Debug, Deserialize)]
+struct StatusTaskSummary {
+    by_status: StatusTaskCounts,
+}
+
+#[derive(Debug, Deserialize)]
+struct StatusTaskCounts {
+    running: u32,
+    needs_review: u32,
+}
+
 #[test]
 fn test_daemon_optional_basic_operations() {
     // TestRepo::new() already uses --no-daemon --no-tmux
     let repo = TestRepo::new();
 
     // Create convoy
-    let convoy: ConvoyCreateData = repo.brat_json(&["convoy", "create", "--title", "No daemon test"]);
-    assert!(!convoy.convoy_id.is_empty(), "convoy_id should not be empty");
+    let convoy: ConvoyCreateData =
+        repo.brat_json(&["convoy", "create", "--title", "No daemon test"]);
+    assert!(
+        !convoy.convoy_id.is_empty(),
+        "convoy_id should not be empty"
+    );
     assert_eq!(convoy.title, "No daemon test");
     assert_eq!(convoy.status, "active");
     println!("Created convoy: {}", convoy.convoy_id);
@@ -78,13 +108,8 @@ fn test_daemon_optional_basic_operations() {
     println!("Created task: {}", task.task_id);
 
     // Update task status
-    let update: TaskUpdateData = repo.brat_json(&[
-        "task",
-        "update",
-        &task.task_id,
-        "--status",
-        "running",
-    ]);
+    let update: TaskUpdateData =
+        repo.brat_json(&["task", "update", &task.task_id, "--status", "running"]);
     assert_eq!(update.task_id, task.task_id);
     assert_eq!(update.status, "running");
     println!("Updated task status to: {}", update.status);
@@ -107,7 +132,8 @@ fn test_daemon_optional_task_transitions() {
     let repo = TestRepo::new();
 
     // Create convoy and task
-    let convoy: ConvoyCreateData = repo.brat_json(&["convoy", "create", "--title", "Transition test"]);
+    let convoy: ConvoyCreateData =
+        repo.brat_json(&["convoy", "create", "--title", "Transition test"]);
     let task: TaskCreateData = repo.brat_json(&[
         "task",
         "create",
@@ -119,23 +145,13 @@ fn test_daemon_optional_task_transitions() {
 
     // Test valid state transitions
     // queued -> running
-    let update: TaskUpdateData = repo.brat_json(&[
-        "task",
-        "update",
-        &task.task_id,
-        "--status",
-        "running",
-    ]);
+    let update: TaskUpdateData =
+        repo.brat_json(&["task", "update", &task.task_id, "--status", "running"]);
     assert_eq!(update.status, "running");
 
     // running -> needs-review
-    let update: TaskUpdateData = repo.brat_json(&[
-        "task",
-        "update",
-        &task.task_id,
-        "--status",
-        "needs-review",
-    ]);
+    let update: TaskUpdateData =
+        repo.brat_json(&["task", "update", &task.task_id, "--status", "needs-review"]);
     // Status is returned as "needsreview" (no hyphen) due to Debug formatting
     assert!(
         update.status == "needsreview" || update.status == "needs-review",
@@ -156,6 +172,52 @@ fn test_daemon_optional_task_transitions() {
 
     repo.assert_git_clean();
     println!("Task transitions test passed!");
+}
+
+#[test]
+fn test_witness_recovers_running_task_with_existing_branch() {
+    let repo = TestRepo::new();
+
+    let convoy: ConvoyCreateData =
+        repo.brat_json(&["convoy", "create", "--title", "Witness recovery"]);
+    let task: TaskCreateData = repo.brat_json(&[
+        "task",
+        "create",
+        "--convoy",
+        &convoy.convoy_id,
+        "--title",
+        "Recover branch",
+    ]);
+
+    let update: TaskUpdateData =
+        repo.brat_json(&["task", "update", &task.task_id, "--status", "running"]);
+    assert_eq!(update.status, "running");
+
+    let branch = format!("task-{}", task.task_id);
+    repo.git_expect(&["branch", &branch]);
+
+    let witness_output =
+        repo.brat_expect(&["witness", "run", "--once", "--engine", "shell", "--json"]);
+    let stdout = String::from_utf8_lossy(&witness_output.stdout);
+    let witness = serde_json::Deserializer::from_str(&stdout)
+        .into_iter::<serde_json::Value>()
+        .last()
+        .expect("witness JSON output")
+        .expect("parse witness output");
+    let data: WitnessRunData =
+        serde_json::from_value(witness.get("data").expect("witness data").clone())
+            .expect("parse witness data");
+
+    assert_eq!(data.iterations, 1);
+    assert_eq!(data.total_tasks_found, 1);
+    assert_eq!(data.total_sessions_spawned, 0);
+    assert_eq!(data.total_errors, 0);
+
+    let status: StatusData = repo.brat_json(&["status"]);
+    assert_eq!(status.tasks.by_status.running, 0);
+    assert_eq!(status.tasks.by_status.needs_review, 1);
+
+    repo.assert_git_clean();
 }
 
 #[test]

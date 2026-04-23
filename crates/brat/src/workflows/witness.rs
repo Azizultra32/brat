@@ -3,6 +3,7 @@
 //! The Witness role spawns and manages polecat sessions for queued tasks.
 
 use std::collections::HashMap;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -41,10 +42,9 @@ impl WitnessConfig {
             max_polecats: config.swarm.max_polecats,
             engine_command: config.swarm.engine.clone(),
             engine_args: config.swarm.engine_args.clone(),
-            monitor_config: MonitorConfig::default()
-                .heartbeat_interval(Duration::from_millis(
-                    config.interventions.heartbeat_interval_ms,
-                )),
+            monitor_config: MonitorConfig::default().heartbeat_interval(Duration::from_millis(
+                config.interventions.heartbeat_interval_ms,
+            )),
             lock_policy: config.locks.policy.clone(),
             session_timeout_minutes: 60, // Default 1 hour
         }
@@ -147,6 +147,10 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
                 continue;
             }
 
+            if self.recover_orphaned_running_task(task)? {
+                continue;
+            }
+
             match self.spawn_session_for_task(task).await {
                 Ok(session_id) => {
                     result.sessions_spawned += 1;
@@ -173,11 +177,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
     /// Give very short-lived sessions a chance to exit and reconcile before a
     /// one-shot witness command terminates.
-    pub async fn settle_fast_exits(
-        &mut self,
-        max_checks: usize,
-        pause: Duration,
-    ) {
+    pub async fn settle_fast_exits(&mut self, max_checks: usize, pause: Duration) {
         for _ in 0..max_checks {
             self.monitor.reconcile_exited_sessions().await;
             self.cleanup_exited_session_locks().await;
@@ -218,9 +218,10 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
             }
 
             // Check if this is queued or running by parsing labels
-            let is_actionable = issue.labels.iter().any(|l| {
-                l == TaskStatus::Queued.as_label() || l == TaskStatus::Running.as_label()
-            });
+            let is_actionable = issue
+                .labels
+                .iter()
+                .any(|l| l == TaskStatus::Queued.as_label() || l == TaskStatus::Running.as_label());
 
             if !is_actionable {
                 continue;
@@ -232,9 +233,9 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
                 .task_dep_list(&issue.issue_id, false)
                 .unwrap_or_default();
 
-            let all_deps_complete = deps.iter().all(|dep| {
-                completed_issue_ids.contains(&dep.issue_id)
-            });
+            let all_deps_complete = deps
+                .iter()
+                .all(|dep| completed_issue_ids.contains(&dep.issue_id));
 
             if !all_deps_complete && !deps.is_empty() {
                 // This task has uncompleted dependencies, skip it
@@ -265,6 +266,46 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         Ok(ready_tasks)
     }
 
+    /// Recover a running task whose session is gone but task branch exists.
+    ///
+    /// This can happen when a short-lived worker exits between one-shot Witness
+    /// invocations. Without this guard, Witness tries to create the same task
+    /// branch again and fails with "branch already exists".
+    fn recover_orphaned_running_task(&self, task: &Task) -> Result<bool, WorkflowError> {
+        if task.status != TaskStatus::Running {
+            return Ok(false);
+        }
+
+        let branch = format!("task-{}", task.task_id);
+        if !self.branch_exists(&branch) {
+            return Ok(false);
+        }
+
+        let _ = self.gritee.issue_comment(
+            &task.gritee_issue_id,
+            &format!(
+                "Witness found task branch `{}` for a running task with no active session; marking needs-review for recovery.",
+                branch
+            ),
+        );
+        self.gritee
+            .task_update_status(&task.task_id, TaskStatus::NeedsReview)?;
+        self.event_emitter
+            .task_updated(&task.task_id, "needs-review", Some(&task.convoy_id));
+
+        Ok(true)
+    }
+
+    fn branch_exists(&self, branch: &str) -> bool {
+        let branch_ref = format!("refs/heads/{}", branch);
+        Command::new("git")
+            .args(["show-ref", "--verify", "--quiet", branch_ref.as_str()])
+            .current_dir(self.gritee.repo_root())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
     /// Check if a task already has an active session.
     async fn has_active_session(&self, task_id: &str) -> bool {
         // Check in-memory cache first
@@ -293,10 +334,7 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
         // Parse paths from task body for lock acquisition
         let paths = full_task.parse_paths();
-        let lock_resources: Vec<String> = paths
-            .iter()
-            .map(|p| format!("path:{}", p))
-            .collect();
+        let lock_resources: Vec<String> = paths.iter().map(|p| format!("path:{}", p)).collect();
 
         // Acquire locks for task paths (TTL = session timeout + 5 min buffer)
         let ttl_ms = (self.config.session_timeout_minutes as i64 + 5) * 60 * 1000;
@@ -355,7 +393,8 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
 
         // Store acquired locks for later release
         if !acquired_locks.is_empty() {
-            self.session_locks.insert(session_id.clone(), acquired_locks.clone());
+            self.session_locks
+                .insert(session_id.clone(), acquired_locks.clone());
         }
 
         // Post spawn comment (include lock info if any)
@@ -371,11 +410,8 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
         self.gritee.issue_comment(&task.gritee_issue_id, &comment)?;
 
         // Emit session started event
-        self.event_emitter.session_started(
-            &session_id,
-            &task.task_id,
-            &self.config.engine_command,
-        );
+        self.event_emitter
+            .session_started(&session_id, &task.task_id, &self.config.engine_command);
 
         // Update task status to Running if it was Queued
         if task.status == TaskStatus::Queued {
@@ -383,11 +419,8 @@ impl<E: Engine + 'static> WitnessWorkflow<E> {
                 .task_update_status(&task.task_id, TaskStatus::Running)?;
 
             // Emit task updated event
-            self.event_emitter.task_updated(
-                &task.task_id,
-                "running",
-                Some(&task.convoy_id),
-            );
+            self.event_emitter
+                .task_updated(&task.task_id, "running", Some(&task.convoy_id));
         }
 
         Ok(session_id)
