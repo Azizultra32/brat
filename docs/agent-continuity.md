@@ -73,6 +73,12 @@ These files are generated under `~/.codex/` and are not repository artifacts:
   - Transition log whenever a thread changes pool state.
 - `session-handoff.md`
   - Human-readable handoff with recent user-message references and exact session log locations.
+- `continuity-supervisor.json`
+  - Machine-readable continuity protocol state including compaction count and caretaker requirements.
+- `continuity-companion.md`
+  - Human-readable continuity report that explicitly documents the documentation companion and caretaker slots.
+- `continuity-supervisor-events.jsonl`
+  - Transition log for compaction count, caretaker requirement, and main-thread pool-state changes.
 
 ## Grite's Role
 
@@ -95,6 +101,10 @@ So the split is:
   - Polls thread telemetry and updates the pool state.
 - [scripts/session_handoff.py](/Users/ali/brat_repo/scripts/session_handoff.py)
   - Builds a human-readable handoff file from session transcripts.
+- [scripts/continuity_supervisor.py](/Users/ali/brat_repo/scripts/continuity_supervisor.py)
+  - High-level daemon that combines pool telemetry, compaction detection, documentation companion output, and caretaker-slot enforcement.
+- [scripts/start_continuity_supervisor.sh](/Users/ali/brat_repo/scripts/start_continuity_supervisor.sh)
+  - Starts the continuity supervisor in a dedicated `tmux` session.
 
 ## Operating Model
 
@@ -103,6 +113,46 @@ So the split is:
 3. Do not delete retired threads.
 4. Use `session-handoff.md` plus the exact referenced session JSONL line numbers for recovery.
 5. If a future session needs deeper detail, read the referenced JSONL transcript directly instead of inventing a summary.
+
+## Documentation Companion
+
+The continuity system now includes a daemon-backed documentation companion.
+
+It is not a free-running language model thread. It is a persistent monitor that rewrites durable files on every poll so future terminals can recover without relying on memory.
+
+Its required outputs are:
+
+- `continuity-companion.md`
+- `continuity-supervisor.json`
+- `session-handoff.md`
+
+The companion report explicitly states that it exists, where its artifacts live, and what the current continuity protocol is. That way a compacted or fresh terminal can discover the companion from disk instead of relying on prior conversation.
+
+## Caretaker Protocol
+
+Main and supervisor threads are treated differently from subagents.
+
+- Main or supervisor at/above threshold:
+  - retire that thread from default reuse,
+  - keep it on ice,
+  - bring in a fresh replacement,
+  - keep the handoff artifacts updated.
+- Subagent at/above threshold:
+  - keep monitoring it,
+  - park it on retirement,
+  - do not force a replacement unless needed for actual work.
+
+Caretaker count is derived from the main thread's actual compaction count:
+
+- first compaction => `1` caretaker slot required
+- second or later compaction => `2` caretaker slots required
+- cap at `2`
+
+The current implementation uses daemon-backed caretaker slots that verify:
+
+- documentation artifacts still exist,
+- the main thread is still documented,
+- the retirement policy is still encoded in the supervisor state.
 
 ## Why This Is Better Than A Manual "Buddy"
 
