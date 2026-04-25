@@ -80,6 +80,13 @@ These files are generated under `~/.codex/` and are not repository artifacts:
 - `continuity-supervisor-events.jsonl`
   - Transition log for compaction count, caretaker requirement, and main-thread pool-state changes.
 
+Repository-local coding continuity artifacts are generated under `.brat/continuity/`:
+
+- `project-continuity.json`
+  - Machine-readable record of terminal-session interactions for the current project.
+- `project-continuity.md`
+  - Human-readable report with the interaction log first and the important-file inventory second.
+
 ## Grite's Role
 
 Grite helps with durable project memory and task tracking, not live context measurement.
@@ -113,6 +120,7 @@ So the split is:
 3. Do not delete retired threads.
 4. Use `session-handoff.md` plus the exact referenced session JSONL line numbers for recovery.
 5. If a future session needs deeper detail, read the referenced JSONL transcript directly instead of inventing a summary.
+6. For coding work, also read `.brat/continuity/project-continuity.md` to see which terminal sessions have touched the repo and which important docs or dotfiles should be re-reviewed.
 
 ## Documentation Companion
 
@@ -127,6 +135,45 @@ Its required outputs are:
 - `session-handoff.md`
 
 The companion report explicitly states that it exists, where its artifacts live, and what the current continuity protocol is. That way a compacted or fresh terminal can discover the companion from disk instead of relying on prior conversation.
+
+## Coding Continuity
+
+Conversation continuity is not enough for coding work.
+
+The continuity supervisor now also writes a repo-local project continuity report:
+
+- `.brat/continuity/project-continuity.md`
+- `.brat/continuity/project-continuity.json`
+
+That project report enforces two extra rules:
+
+- interaction log comes first,
+- important review files come second.
+
+### Terminal Interaction Log
+
+Every terminal session that is actively working on the project must be logged with:
+
+- terminal id,
+- date and time,
+- host/computer,
+- project root,
+- current working directory,
+- main thread id,
+- interaction count.
+
+The same session record is updated on every poll, so staleness can be judged by interaction count instead of only elapsed wall-clock time.
+
+### Important Files Inventory
+
+The project report also maintains a list of review-worthy files, including:
+
+- `AGENTS.md`
+- architecture and design markdown files,
+- repo docs under `docs/`,
+- dotfiles and hidden tooling documents such as `.env.example`, `.claude/*.md`, and similar config or instruction files.
+
+This gives future terminals a concrete checklist of files that should be re-reviewed before or during coding work.
 
 ## Caretaker Protocol
 

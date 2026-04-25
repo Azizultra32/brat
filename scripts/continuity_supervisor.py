@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import os
 import signal
+import socket
 import sys
 import time
 from dataclasses import dataclass
@@ -23,6 +25,214 @@ class CompactionRef:
     timestamp: str
     line_no: int
     message_preview: str
+
+
+IMPORTANT_DOC_NAMES = {
+    "agents.md",
+    "architecture.md",
+    "readme.md",
+    "contributing.md",
+    "roadmap.md",
+    "operations.md",
+    "daemon.md",
+    "agent-playbook.md",
+    "cli.md",
+    "design.md",
+    "spec.md",
+    "canonical-spec.md",
+    "data-model.md",
+    "roles.md",
+    "actors.md",
+    "merge-policy.md",
+    "workflow.md",
+    "workflows.md",
+}
+IMPORTANT_DOTFILE_NAMES = {
+    ".env",
+    ".env.example",
+    ".env.local",
+    ".envrc",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+    ".nvmrc",
+    ".python-version",
+    ".tool-versions",
+}
+IMPORTANT_SUFFIXES = {".md", ".toml", ".json", ".yaml", ".yml"}
+IGNORED_DIRS = {
+    ".git",
+    ".brat",
+    ".grite",
+    ".gritee",
+    "target",
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    "__pycache__",
+}
+
+
+def read_terminal_id() -> str | None:
+    tid_file = Path.home() / ".codex" / ".tid_current"
+    if not tid_file.exists():
+        return None
+    value = tid_file.read_text().strip()
+    return value or None
+
+
+def scan_important_files(project_root: Path, limit: int) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    for path in project_root.rglob("*"):
+        if not path.is_file():
+            continue
+        if any(part in IGNORED_DIRS for part in path.relative_to(project_root).parts[:-1]):
+            continue
+
+        relative_path = path.relative_to(project_root).as_posix()
+        name_lower = path.name.lower()
+        reasons: list[str] = []
+        score = 0
+
+        if name_lower == "agents.md":
+            reasons.append("agent_instructions")
+            score += 100
+        if name_lower in IMPORTANT_DOC_NAMES:
+            reasons.append("named_review_doc")
+            score += 60
+        if relative_path.startswith("docs/") and path.suffix.lower() == ".md":
+            reasons.append("docs_markdown")
+            score += 35
+        if any(part.startswith(".") for part in path.relative_to(project_root).parts[:-1]) and path.suffix.lower() in IMPORTANT_SUFFIXES:
+            reasons.append("hidden_tooling_doc")
+            score += 30
+        if path.name in IMPORTANT_DOTFILE_NAMES:
+            reasons.append("dotfile")
+            score += 45
+        if path.name.startswith(".") and path.suffix.lower() in IMPORTANT_SUFFIXES:
+            reasons.append("dotfile")
+            score += 25
+        if not reasons and path.suffix.lower() == ".md":
+            reasons.append("markdown")
+            score += 15
+
+        if not reasons:
+            continue
+
+        stat = path.stat()
+        matches.append({
+            "path": relative_path,
+            "reasons": reasons,
+            "score": score,
+            "mtime": stat.st_mtime,
+            "size_bytes": stat.st_size,
+        })
+
+    matches.sort(key=lambda item: (-item["score"], item["path"]))
+    selected = matches[:limit]
+    for item in selected:
+        item["mtime_iso"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(item["mtime"]))
+        del item["mtime"]
+    return selected
+
+
+def load_json_file(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text())
+
+
+def update_project_continuity(
+    project_root: Path,
+    project_state_file: Path,
+    project_report_file: Path,
+    terminal_id: str | None,
+    terminal_host: str,
+    project_session_id: str,
+    cwd: Path,
+    observed_at: str,
+    important_files_limit: int,
+    main_thread_id: str,
+) -> dict[str, Any]:
+    state = load_json_file(project_state_file)
+    sessions = state.get("sessions", [])
+    session = next((item for item in sessions if item.get("project_session_id") == project_session_id), None)
+    if session is None:
+        session = {
+            "project_session_id": project_session_id,
+            "terminal_id": terminal_id,
+            "host": terminal_host,
+            "project_root": str(project_root),
+            "cwd": str(cwd),
+            "first_seen_at": observed_at,
+            "last_seen_at": observed_at,
+            "interaction_count": 1,
+            "main_thread_id": main_thread_id,
+        }
+        sessions.append(session)
+    else:
+        session["last_seen_at"] = observed_at
+        session["interaction_count"] = int(session.get("interaction_count", 0)) + 1
+        session["cwd"] = str(cwd)
+        session["main_thread_id"] = main_thread_id
+
+    sessions.sort(key=lambda item: (item.get("last_seen_at") or "", item.get("first_seen_at") or ""), reverse=True)
+    state.update({
+        "observed_at": observed_at,
+        "project_root": str(project_root),
+        "current_session_id": project_session_id,
+        "sessions": sessions[:200],
+        "important_files": scan_important_files(project_root, important_files_limit),
+    })
+
+    project_state_file.parent.mkdir(parents=True, exist_ok=True)
+    project_report_file.parent.mkdir(parents=True, exist_ok=True)
+    project_state_file.write_text(json.dumps(state, indent=2) + "\n")
+    project_report_file.write_text(render_project_continuity_markdown(state))
+    return state
+
+
+def render_project_continuity_markdown(state: dict[str, Any]) -> str:
+    lines: list[str] = []
+    lines.append("# Project Continuity")
+    lines.append("")
+    lines.append("## Terminal Interaction Log")
+    lines.append("")
+    lines.append(
+        "This section comes first on purpose. Every terminal session that works on this project must be logged here so staleness can be measured by interactions, not just elapsed time."
+    )
+    lines.append("")
+    lines.append(f"- `observed_at`: `{state.get('observed_at')}`")
+    lines.append(f"- `project_root`: `{state.get('project_root')}`")
+    lines.append(f"- `current_session_id`: `{state.get('current_session_id')}`")
+    lines.append("")
+    for session in state.get("sessions", []):
+        lines.append(f"### {session.get('project_session_id')}")
+        lines.append("")
+        lines.append(f"- `terminal_id`: `{session.get('terminal_id') or 'unknown'}`")
+        lines.append(f"- `host`: `{session.get('host')}`")
+        lines.append(f"- `project_root`: `{session.get('project_root')}`")
+        lines.append(f"- `cwd`: `{session.get('cwd')}`")
+        lines.append(f"- `first_seen_at`: `{session.get('first_seen_at')}`")
+        lines.append(f"- `last_seen_at`: `{session.get('last_seen_at')}`")
+        lines.append(f"- `interaction_count`: `{session.get('interaction_count')}`")
+        lines.append(f"- `main_thread_id`: `{session.get('main_thread_id')}`")
+        lines.append("")
+    lines.append("## Important Files To Review")
+    lines.append("")
+    lines.append(
+        "These are the dotfiles, agent files, architecture docs, and other project documents that should be reviewed regularly during coding work."
+    )
+    lines.append("")
+    for item in state.get("important_files", []):
+        reasons = ", ".join(item["reasons"])
+        lines.append(f"- `{item['path']}`")
+        lines.append(f"  reasons: `{reasons}`")
+        lines.append(f"  last_modified: `{item['mtime_iso']}`")
+        lines.append(f"  size_bytes: `{item['size_bytes']}`")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def parse_compaction_events(session_file: Path) -> list[CompactionRef]:
@@ -368,6 +578,14 @@ def main() -> int:
         "--supervisor-events-file",
         default=str(Path.home() / ".codex" / "continuity-supervisor-events.jsonl"),
     )
+    parser.add_argument("--project-root", default=os.getcwd())
+    parser.add_argument("--project-state-file")
+    parser.add_argument("--project-report-file")
+    parser.add_argument("--terminal-id")
+    parser.add_argument("--terminal-host")
+    parser.add_argument("--project-session-id")
+    parser.add_argument("--cwd", default=os.getcwd())
+    parser.add_argument("--important-files-limit", type=int, default=80)
     args = parser.parse_args()
 
     thread_ids = unique_threads(
@@ -395,6 +613,24 @@ def main() -> int:
     supervisor_file = Path(args.supervisor_file)
     companion_file = Path(args.companion_file)
     supervisor_events_file = Path(args.supervisor_events_file)
+    project_root = Path(args.project_root).resolve()
+    project_state_file = (
+        Path(args.project_state_file)
+        if args.project_state_file
+        else project_root / ".brat" / "continuity" / "project-continuity.json"
+    )
+    project_report_file = (
+        Path(args.project_report_file)
+        if args.project_report_file
+        else project_root / ".brat" / "continuity" / "project-continuity.md"
+    )
+    terminal_id = args.terminal_id or read_terminal_id()
+    terminal_host = args.terminal_host or socket.gethostname()
+    project_session_id = (
+        args.project_session_id
+        or f"{terminal_id or 'unknown-terminal'}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}"
+    )
+    current_cwd = Path(args.cwd).resolve()
     artifact_paths = {
         "pool_snapshot": state_file,
         "pool_events": events_file,
@@ -427,6 +663,18 @@ def main() -> int:
             companion_file=companion_file,
             events_file=supervisor_events_file,
             previous=previous_supervisor,
+        )
+        update_project_continuity(
+            project_root=project_root,
+            project_state_file=project_state_file,
+            project_report_file=project_report_file,
+            terminal_id=terminal_id,
+            terminal_host=terminal_host,
+            project_session_id=project_session_id,
+            cwd=current_cwd,
+            observed_at=pool_snapshot["observed_at"],
+            important_files_limit=args.important_files_limit,
+            main_thread_id=args.main_thread,
         )
 
         print(render_supervisor_summary(supervisor_state, pool_snapshot), flush=True)

@@ -11,6 +11,8 @@ from continuity_supervisor import (  # noqa: E402
     build_caretaker_slots,
     build_supervisor_state,
     parse_compaction_events,
+    scan_important_files,
+    update_project_continuity,
 )
 
 
@@ -152,6 +154,70 @@ class ContinuitySupervisorTests(unittest.TestCase):
             self.assertEqual("standby", slots[1]["status"])
             self.assertFalse(slots[0]["checks"][0]["ok"])
             self.assertFalse(slots[0]["checks"][1]["ok"])
+
+    def test_scan_important_files_prioritizes_agents_and_architecture_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "AGENTS.md").write_text("agents")
+            (root / "docs").mkdir()
+            (root / "docs" / "architecture.md").write_text("architecture")
+            (root / ".claude").mkdir()
+            (root / ".claude" / "mayor_context.md").write_text("context")
+            (root / ".env.example").write_text("X=1")
+            (root / "target").mkdir()
+            (root / "target" / "ignored.md").write_text("ignored")
+
+            files = scan_important_files(root, limit=10)
+            paths = [item["path"] for item in files]
+
+            self.assertIn("AGENTS.md", paths)
+            self.assertIn("docs/architecture.md", paths)
+            self.assertIn(".claude/mayor_context.md", paths)
+            self.assertIn(".env.example", paths)
+            self.assertNotIn("target/ignored.md", paths)
+            self.assertEqual("AGENTS.md", files[0]["path"])
+
+    def test_update_project_continuity_tracks_terminal_interactions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "AGENTS.md").write_text("agents")
+            project_state_file = root / ".brat" / "continuity" / "project-continuity.json"
+            project_report_file = root / ".brat" / "continuity" / "project-continuity.md"
+
+            first = update_project_continuity(
+                project_root=root,
+                project_state_file=project_state_file,
+                project_report_file=project_report_file,
+                terminal_id="c-123",
+                terminal_host="example-host",
+                project_session_id="c-123-20260425T000000Z",
+                cwd=root,
+                observed_at="2026-04-25T00:00:00Z",
+                important_files_limit=20,
+                main_thread_id="main-thread",
+            )
+            second = update_project_continuity(
+                project_root=root,
+                project_state_file=project_state_file,
+                project_report_file=project_report_file,
+                terminal_id="c-123",
+                terminal_host="example-host",
+                project_session_id="c-123-20260425T000000Z",
+                cwd=root,
+                observed_at="2026-04-25T00:10:00Z",
+                important_files_limit=20,
+                main_thread_id="main-thread",
+            )
+
+            self.assertEqual(1, len(first["sessions"]))
+            self.assertEqual(1, len(second["sessions"]))
+            self.assertEqual(2, second["sessions"][0]["interaction_count"])
+            self.assertEqual("2026-04-25T00:10:00Z", second["sessions"][0]["last_seen_at"])
+            self.assertTrue(project_report_file.exists())
+            report = project_report_file.read_text()
+            self.assertIn("## Terminal Interaction Log", report)
+            self.assertIn("c-123-20260425T000000Z", report)
+            self.assertIn("## Important Files To Review", report)
 
 
 if __name__ == "__main__":
