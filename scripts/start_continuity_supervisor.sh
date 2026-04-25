@@ -8,7 +8,7 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 session_name="${SESSION_NAME:-continuity-supervisor}"
-log_file="${HOME}/.codex/continuity-supervisor.log"
+log_file="${CONTINUITY_SUPERVISOR_LOG_FILE:-${HOME}/.codex/continuity-supervisor.log}"
 terminal_id="${TERMINAL_ID:-$(cat "${HOME}/.codex/.tid_current" 2>/dev/null || true)}"
 terminal_host="${TERMINAL_HOST:-$(hostname)}"
 project_session_id="${PROJECT_SESSION_ID:-${terminal_id:-unknown-terminal}-$(date -u +%Y%m%dT%H%M%SZ)}"

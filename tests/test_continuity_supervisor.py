@@ -11,6 +11,7 @@ from continuity_supervisor import (  # noqa: E402
     build_caretaker_slots,
     build_supervisor_state,
     parse_compaction_events,
+    render_project_continuity_markdown,
     scan_important_files,
     update_project_continuity,
 )
@@ -218,6 +219,41 @@ class ContinuitySupervisorTests(unittest.TestCase):
             self.assertIn("## Terminal Interaction Log", report)
             self.assertIn("c-123-20260425T000000Z", report)
             self.assertIn("## Important Files To Review", report)
+
+    def test_render_project_continuity_keeps_interactions_before_files(self) -> None:
+        content = render_project_continuity_markdown({
+            "observed_at": "2026-04-25T00:10:00Z",
+            "project_root": "/tmp/project",
+            "current_session_id": "session-1",
+            "sessions": [
+                {
+                    "project_session_id": "session-1",
+                    "terminal_id": "c-123",
+                    "host": "host-1",
+                    "project_root": "/tmp/project",
+                    "cwd": "/tmp/project",
+                    "first_seen_at": "2026-04-25T00:00:00Z",
+                    "last_seen_at": "2026-04-25T00:10:00Z",
+                    "interaction_count": 2,
+                    "main_thread_id": "main-thread",
+                }
+            ],
+            "important_files": [
+                {
+                    "path": "AGENTS.md",
+                    "reasons": ["agent_instructions"],
+                    "mtime_iso": "2026-04-25T00:00:00Z",
+                    "size_bytes": 123,
+                }
+            ],
+        })
+
+        self.assertLess(
+            content.index("## Terminal Interaction Log"),
+            content.index("## Important Files To Review"),
+        )
+        self.assertIn("interaction_count", content)
+        self.assertIn("AGENTS.md", content)
 
 
 if __name__ == "__main__":

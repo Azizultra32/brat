@@ -112,6 +112,8 @@ So the split is:
   - High-level daemon that combines pool telemetry, compaction detection, documentation companion output, and caretaker-slot enforcement.
 - [scripts/start_continuity_supervisor.sh](/Users/ali/brat_repo/scripts/start_continuity_supervisor.sh)
   - Starts the continuity supervisor in a dedicated `tmux` session.
+- [scripts/test_continuity_stack.sh](/Users/ali/brat_repo/scripts/test_continuity_stack.sh)
+  - Runs the full continuity validation suite: unit tests, Python compile checks, one-shot artifact generation, and tmux launcher smoke test.
 
 ## Operating Model
 
@@ -200,6 +202,25 @@ The current implementation uses daemon-backed caretaker slots that verify:
 - documentation artifacts still exist,
 - the main thread is still documented,
 - the retirement policy is still encoded in the supervisor state.
+
+## Testing
+
+The continuity stack now has a single repeatable smoke entrypoint:
+
+```bash
+./scripts/test_continuity_stack.sh
+```
+
+That script validates all major elements:
+
+- unit tests for compaction parsing, caretaker logic, project interaction logging, and report ordering,
+- Python compile checks for the continuity scripts,
+- one-shot `context_pool_watch.py`,
+- one-shot `session_handoff.py`,
+- one-shot `continuity_supervisor.py` with temp outputs,
+- tmux launcher smoke test with an isolated log file.
+
+If a future change touches the continuity stack, this script should be the first end-to-end check.
 
 ## Why This Is Better Than A Manual "Buddy"
 
