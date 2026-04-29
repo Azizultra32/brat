@@ -84,6 +84,21 @@ The hash input is the following array (no maps):
 - For hashing only, `labels` in `IssueCreated` are sorted lexicographically to treat them as a set.
 - `sig` is **not** included in the hash; it may sign the `event_id` instead.
 
+## Signature semantics
+
+`sig` is optional authentication metadata. It never changes `event_id`.
+
+When present, `sig` is a canonical CBOR signature envelope defined in
+`docs/security-signing.md`. The v1 signature payload signs `event_id`, `actor`,
+`issue_id`, `ts_unix_ms`, `parent`, `signed_at_ms`, `key_id`, and `sig_alg` with
+a domain separator. It does not sign the serialized event including `sig`.
+Verification must recompute `event_id` from the unsigned event body before
+checking the signature.
+
+Unsigned legacy events use `sig = null`. Verification policy decides whether
+unsigned events are accepted, warned, or rejected; projection rebuilds do not
+change signature status.
+
 ## Deterministic projection
 
 `IssueProjection` is computed by folding events for an issue:

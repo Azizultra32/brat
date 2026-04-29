@@ -71,5 +71,6 @@ These milestones are implemented in the Grite repository.
 
 - [x] Stress tests (concurrent writers) - in Grite repo
 - [ ] Corruption recovery
-- [ ] Security (signing and verification)
-- [ ] DB maintenance thresholds and docs
+- [x] Security signing/verification design
+- [ ] Security signing/verification implementation
+- [x] DB maintenance thresholds and docs

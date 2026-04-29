@@ -131,6 +131,16 @@ Both daemons are optional. All commands work without them (standalone mode).
 | Auto-start fails | Warning shown, command continues |
 | bratd crashes | Restart with `brat daemon start` |
 | grited crashes | Lock expires, CLI takes over automatically |
+| Grite DB reports busy/locked | Run `brat --no-daemon doctor --check --json`, inspect `grite daemon status --json`, stop stale `grited`, then retry |
+| Grite projection appears corrupt | Preserve `refs/grite/*`; run `grite doctor --fix --json` or `grite rebuild`, then rerun Brat doctor |
+| Grite DB maintenance is due | Inspect `gritee_db_maintenance` in Brat doctor output or `grite --no-daemon db stats --json`, then run `grite doctor --fix --json` or `grite rebuild` during a maintenance window |
+
+`brat doctor --check` includes a daemon-independent Grite projection probe named
+`gritee_projection_accessible` and a DB stats probe named
+`gritee_db_maintenance`. If either check warns or fails, follow its remediation
+text before starting worker sessions. The recovery path is local and monotonic:
+it may rebuild cache/projection state, but it must not touch tracked repo files
+or rewrite Grite refs.
 
 ---
 
